@@ -67,7 +67,7 @@ IcomSim radio(Serial);                                          // usa la serial
 // IcomSim radio(mySerial);                                     // Usa SoftwareSerial per la comunicazione seriale
 
 //--------------------------------------------------------- Definizione variabili
-uint32_t frequenza = 74025UL * 100;  
+uint32_t frequenza = 145500UL * 100;  
 
 bool mute = true;
 bool monitor = false;
