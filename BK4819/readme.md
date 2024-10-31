@@ -1,9 +1,9 @@
 # BK4819 Arduino Library
 
-<img src="images/Board X.jpg" alt="Board X" style="display: block; margin-left: auto; margin-right: auto; width: 50%;">
+<img src="images/board X.jpg" alt="Board X" style="display: block; margin-left: auto; margin-right: auto; width: 50%;">
 
 ## Description
-This is an Arduino library for interfacing with the **Beken BK4819** radio module. The library allows easy control and communication with the BK4819 tool, providing functions to handle various radio operations.
+This is an Arduino library for interfacing with the **Beken BK4819** radio module. The library allows easy control and communication with the **BK4819 tool**, providing functions to handle various radio operations.
 
 ## Features
 - Full control of BK4819 radio functionalities.
@@ -54,6 +54,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contributions
 Contributions are welcome! Please feel free to submit pull requests to improve the library or fix issues.
-
-## Issues
-If you encounter any issues or have suggestions for improvements, please open an issue on GitHub.
