@@ -26,7 +26,7 @@
 
 // ---------------------------------------------------- Configurazione tabella Gain
 const t_gain_table gain_table[] =
-{                      //              				LNAS	LNAG	MIX		PGA
+{                      //   Idx      dB				LNAS	LNAG	MIX		PGA
 	{0x10	,90},      //	0 	  	-57   			0		0		2		0		
 	{0x1	,88},      //	1 		-55       		0		0	    0	    1
 	{0x9	,87},      //	2  		-54      		0		0	    1	    1
@@ -59,12 +59,13 @@ const t_gain_table gain_table[] =
 	{0x3BF	,3 },      //   29 		+28      		3		5		3		7					
 	{0x3DF	,2 },      //   30 		+31      		3		6		3		7
 	{0x3FF	,0 },      //   31 		+33  			3		7		3		7
-
 };
 
 t_Vfo_Data Vfo;
 
-
+// ******************************************************************************************************************************
+//
+// ******************************************************************************************************************************
 // ---------------------------------------------------- Configurazione Libreria
 BK4819::BK4819(int csPin, int MosiPin, int MisoPin, int sckPin) 
 {
@@ -187,14 +188,19 @@ void BK4819::BK4819_Init()
 	
 	BK4819_Set_AF(AF_MUTE);						// Silenzia l'audio
 	
-	BK4819_Clear_Interrupt();
+	BK4819_RF_Set_Agc(0);						// Inizializza l'AGC (Automatic Gain Control)
+	BK4819_Set_AGC_Gain(AGC_MAN, 0);			// azzera il gain 
+	BK4819_Set_Squelch (255,255, 127,127, 127, 127); // setup Squelch al massimo valore
+	
+	BK4819_Clear_Interrupt();					// cancella gli eventuali interrupt pendenti
 	
 	BK4819_Set_Xtal(XTAL26M);
 
-    BK4819_RF_Set_Agc(0);						// Inizializza l'AGC (Automatic Gain Control)
-	BK4819_Set_AGC_Gain(AGC_AUTO, 27);
-
-	BK4819_Write_Register(0x36, 0x0022);  		// Registro 36: configurazione dell'amplificatore di potenza (PA)
+	BK4819_Write_Register(0x36, 0x0000);  		// Registro 36: configurazione dell'amplificatore di potenza (PA) Bias = 0V
+												// <15:8>	Bias output 0-3.2V
+												// <7>		Enable PA Ctl out
+												// <5:3>	Gain 1	 0-7
+												// <2:0>	Gain 2	 0-7
 	
 	BK4819_Write_Register(0x3E, 0xA037);		// Band selection threshold ( VCO max. frequency (Hz)/96/640 )
 	
@@ -249,9 +255,17 @@ void BK4819::BK4819_SoftReset()
 	BK4819_Write_Register(0, 0x0000);  			// normale
 }
 
+// ---------------------------------------------------- Spegne il modulo radio
+void BK4819::BK4819_RX_TurnOff(void)
+{
+	BK4819_Write_Register(0x30, 0);
+}
+
 // ---------------------------------------------------- Accensione radio in RX
 void BK4819::BK4819_RX_TurnOn(void)
 {
+	BK4819_Write_Register(0x36, 0x0000);
+	
 	// DSP Voltage Setting = 1			1 
 	
 	// ANA LDO = 2.7v					1
@@ -377,8 +391,8 @@ void BK4819::BK4819_Set_AF(AF_Type_t af)
 	// REG_47
 	// ----------------------------
 	// <15>			?
-	// <14>		1	?
-	// <13> 	1   AF output inverse mode: 1: Inverse
+	// <14>	  0x1	?
+	// <13>   0x1   AF output inverse mode: 1: Inverse
 	// <12>			?
 	// <11:8> 0x1   AF output selection:
 
@@ -386,18 +400,18 @@ void BK4819::BK4819_Set_AF(AF_Type_t af)
 	// 				AF_FM        =  1u,  // FM
 	// 				AF_TONE      =  2u,  // Tone
 	//				AF_BEEP      =  3u,  // Beep for TX
-	// 				AF_RAW	    =  4u,  // raw (ssb without if filter = raw in sdr sharp)
-	// 				AF_DSB 	    =  5u,  // dsb (or ssb = lsb and usb at the same time)
+	// 				AF_RAW	     =  4u,  // raw (ssb without if filter = raw in sdr sharp)
+	// 				AF_DSB 	     =  5u,  // dsb (or ssb = lsb and usb at the same time)
 	// 				AF_CTCOUT    =  6u,  // ctcss/dcs (fm with narrow filters for ctcss/dcs)
 	// 				AF_AM        =  7u,  // AM
 	// 				AF_FSKOUT    =  8u,  // fsk out test with special fsk filters (need reg58 fsk on to give sound on speaker )
 	// 				AF_BYPASS    =  9u,  // bypass (fm without filter = discriminator output)
 	
 	// 				AF_UNKNOWN4  = 10u,  // nothing at all
-	// 				AF_UNKNOWN5  = 11u,  // distorted
-	// 				AF_UNKNOWN6  = 12u,  // distorted
-	// 				AF_UNKNOWN7  = 13u,  // interesting
-	// 				AF_UNKNOWN8  = 14u,  // interesting 
+	// 				AF_UNKNOWN5  = 11u,  // ? distorted
+	// 				AF_UNKNOWN6  = 12u,  // ? distorted
+	// 				AF_UNKNOWN7  = 13u,  // ? interesting
+	// 				AF_UNKNOWN8  = 14u,  // ? interesting 
 	// 				AF_UNKNOWN9  = 15u   // not a lot	
 	
 	// <7:1>		?				
@@ -411,13 +425,13 @@ void BK4819::BK4819_Set_AF(AF_Type_t af)
 // ---------------------------------------------------- Cancella Interrupt
 void BK4819::BK4819_Clear_Interrupt( void )
 {
-	while (1)													// prima di tutto azzera tutti gli interrupt pendenti per non attivare una ricezione non desiderata
+	while (1)													// azzera tutti gli interrupt pendenti per non attivare una ricezione non desiderata
 	{
 		const uint16_t Status = BK4819_Read_Register(0x0C);		// Registro Interrupt
 		if ((Status & 1u) == 0) break;							// <0> INTERRUPT REQUEST  1=Interrupt Request; 0=No Request.
 
 		BK4819_Write_Register(0x02, 0);							// Cancella gli interrupt pendenti
-		delayMicroseconds(100);
+		delayMicroseconds(100);									// tempo di attesa per la lettura successiva
 	}
 }
 
@@ -431,8 +445,8 @@ void BK4819::BK4819_IRQ_Set (BK4819_IRQType_t InterruptMask)
 // ---------------------------------------------------- Check Stato Interrupt
 BK4819_IRQType_t BK4819::BK4819_Check_Irq_type( void )
 {
-	const BK4819_IRQType_t irq = BK4819_Read_Register(0x02);
-	
+	BK4819_Write_Register(0x02, 0);								// Cancella gli interrupt pendenti
+	const BK4819_IRQType_t irq = BK4819_Read_Register(0x02);	// legge gli interrupt in atto
 	return irq;
 }	
 
@@ -479,9 +493,6 @@ void BK4819::BK4819_RF_Set_Agc(u8 mode)
 	}                                                                                                                                                                                                                                                                                                 
 }
 
-
-
-
 // ---------------------------------------------------- Imposta Gain e livello
 void  BK4819::BK4819_Set_AGC_Gain(uint8_t Agc, uint8_t Value)
 {
@@ -507,10 +518,10 @@ void  BK4819::BK4819_Set_AGC_Gain(uint8_t Agc, uint8_t Value)
 	
 	const uint16_t regVal = BK4819_Read_Register(0x7E);
 	BK4819_Write_Register(0x7E, (regVal & ~(1 << 15) & ~(0b111 << 12)) |
-										 (gAGCfix << 15) | 
-										 (gAGCidx << 12) | 
-										 (5u << 3)       | 
-										 (6u << 0));
+								(gAGCfix << 15) | 
+								(gAGCidx << 12) | 
+								(5u << 3)       | 
+								(6u << 0));
 
 
 	// REG_13
@@ -552,38 +563,28 @@ void  BK4819::BK4819_Set_AGC_Gain(uint8_t Agc, uint8_t Value)
 	//         0 = -33dB
 	//
 	
-	
-	
-	BK4819_Write_Register(0x13, gain_table[Value].reg_val );
-
 	BK4819_Write_Register(0x12, (3u << 8) | (3u << 5) | (3u << 3) | (4u << 0));  // 000000 11 011 11 100  0x037C =  3 3 3 4
 	BK4819_Write_Register(0x11, (2u << 8) | (3u << 5) | (3u << 3) | (3u << 0));  // 000000 10 011 11 011  0x027B =  2 3 3 3
 	BK4819_Write_Register(0x10, (0u << 8) | (3u << 5) | (3u << 3) | (2u << 0));  // 000000 00 011 11 010  0x007A =  0 3 3 2
-	BK4819_Write_Register(0x14, (0u << 8) | (0u << 5) | (3u << 3) | (1u << 0));  // 000000 00 000 11 000  0x0018 =  0 0 3 0	
-
+	BK4819_Write_Register(0x14, (0u << 8) | (0u << 5) | (3u << 3) | (1u << 0));  // 000000 00 000 11 000  0x0019 =  0 0 3 1	
 
 	if(gAGCfix)
 	{
-		BK4819_Write_Register(0x49, (0 << 14) | (50 << 7) | (15 << 0)); // slow 45 25 / fast 50 15
-		BK4819_Write_Register(0x14, 0x0000);
+		BK4819_Write_Register(0x13, gain_table[Value].reg_val );
+		BK4819_Write_Register(0x49, (0 << 14) | (50 << 7) | (15 << 0)); 
 	}
 	else
 	{
 		BK4819_Write_Register(0x13, 0x295);
 		BK4819_Write_Register(0x49, (0 << 14) | (84 << 7) | (56 << 0));
-		BK4819_Write_Register(0x14, 0x0019);
 	}
 
 	// BK4819_Write_Register(BK4819_REG_49, 0x2A38);
-
-	// BK4819_Write_Register(BK4819_REG_49, (0 << 14)   |
-										 // (0x84 << 7) |
-										 // (0x56 << 0));
 	//														<15:14> 00 = auto / 10 = Low Lo / 11 = High Lo
 	//														<13:7>  High Threshold LSB 1dB
 	//														<6:0>   Low Threshold LSB  1dB
 	// 54 3210987 6543210
-	// 00 1010100 0111000 		84 56
+	// 00 1010100 0111000 		84 56						slow 45 25 / fast 50 15
 
 
 	// TBR: listed as two values, agc_rssi and lna_peak_rssi
@@ -613,7 +614,7 @@ void BK4819::BK4819_Set_Xtal(BK4819_Xtal_t mode)
 			BK4819_Write_Register(0x41,0x81C1);                    
     		BK4819_Write_Register(0x3B,0xAC40);
     		BK4819_Write_Register(0x3C,0x2708); 
-    		BK4819_Write_Register(0x3D,0x3555);
+    		BK4819_Write_Register(0x3D,0x3555);		// registro IF
 			break;
 			
 		case XTAL19M2:
@@ -621,7 +622,7 @@ void BK4819::BK4819_Set_Xtal(BK4819_Xtal_t mode)
 			BK4819_Write_Register(0x41,0x81C2);                    
     		BK4819_Write_Register(0x3B,0x9800);
     		BK4819_Write_Register(0x3C,0x3A48); 
-    		BK4819_Write_Register(0x3D,0x2E39);
+    		BK4819_Write_Register(0x3D,0x2E39);		// registro IF
 			break;
 			
 		case XTAL12M8:
@@ -629,7 +630,7 @@ void BK4819::BK4819_Set_Xtal(BK4819_Xtal_t mode)
 			BK4819_Write_Register(0x41,0x81C1);                    
     		BK4819_Write_Register(0x3B,0x1000);
     		BK4819_Write_Register(0x3C,0x2708); 
-    		BK4819_Write_Register(0x3D,0x3555);
+    		BK4819_Write_Register(0x3D,0x3555);		// registro IF
 			break;
 			
 		case XTAL25M6:
@@ -642,11 +643,9 @@ void BK4819::BK4819_Set_Xtal(BK4819_Xtal_t mode)
 			BK4819_Write_Register(0x41,0x81C5);                    
     		BK4819_Write_Register(0x3B,0x3000);
     		BK4819_Write_Register(0x3C,0x75C8); 
-    		BK4819_Write_Register(0x3D,0x261C);
+    		BK4819_Write_Register(0x3D,0x261C);		// registro IF
 			break;
-
 	}
-	
 }
 
 // ---------------------------------------------------- Set Automatic Frequency control
@@ -706,7 +705,7 @@ void BK4819::BK4819_Set_Squelch
 	//
 	// 0 ~ 255
 	//
-	BK4819_Write_Register(0x4D, 0xA000 | Squelch_Close_Glitch);		// A0 ??
+	BK4819_Write_Register(0x4D, 0xA000 | Squelch_Close_Glitch);		
 
 	// REG_4E
 	//
@@ -723,21 +722,11 @@ void BK4819::BK4819_Set_Squelch
 	// <7:0>   8 Glitch threshold for Squelch = open
 	//         0 ~ 255
 	//
-	BK4819_Write_Register(0x4E,  // 01 101 11 1 00000000
-	// #ifndef ENABLE_FASTER_CHANNEL_SCAN
-																// original (*)
-		(1u << 14) |          //  1 ???
-		(5U << 11) |          // *5  squelch = open  delay .. 0 ~ 7		// ijv
-		(6u <<  9) |          // *3  squelch = close delay .. 0 ~ 7		// ijv
-		Squelch_Open_Glitch);     	 				   			//  0 ~ 255
-		
-	// #else
-		// faster (but twitchier)
-		// (1u << 14) |                  //  1 ???
-		// (2u << 11) |                  // *5  squelch = open  delay .. 0 ~ 7		// ijv
-		// (3u <<  9) |                  // *3  squelch = close delay .. 0 ~ 3		// ijv
-		// Squelch_Open_Glitch);     //  0 ~ 255
-	// #endif
+	BK4819_Write_Register(0x4E,  			// 01 101 11 1 00000000  // original (*)
+						 (1u << 14) |       //  1 ???
+						 (5U << 11) |       // *5  squelch = open  delay .. 0 ~ 7		
+		                 (6u <<  9) |       // *3  squelch = close delay .. 0 ~ 7		
+		                  Squelch_Open_Glitch);  //  0 ~ 255
 
 	// REG_4F
 	//
@@ -759,17 +748,15 @@ void BK4819::BK4819_Set_Squelch
 	//
 	BK4819_Write_Register(0x78, ((uint16_t)Squelch_Open_RSSI   << 8) | Squelch_Close_RSSI);
 
-	//BK4819_RX_TurnOn();
 }
-
 
 // ---------------------------------------------------- Squelch mode set
 void BK4819::BK4819_Squelch_Mode ( BK4819_SquelchMode_t mode )
 {
 	// 0x88/0xA8: RSSI + noise + Glitch
-	// 0xaa: RSSI + Glitch
-	// 0xcc: RSSI + noise
-	// 0xFF: RSSI
+	// 0xaa: 	  RSSI + Glitch
+	// 0xcc: 	  RSSI + noise
+	// 0xFF:      RSSI
 	
 	BK4819_Write_Register(0x77, 0 | (mode << 8) | 0xFF);	
 }	
@@ -780,6 +767,257 @@ int16_t BK4819::BK4819_Get_RSSI (void)
 {
 	uint16_t reg = BK4819_Read_Register(0x67);
 	int16_t rssi = (reg & 0x01FF)/2-160;
-	
 	return rssi;  
 }	
+
+
+// ---------------------------------------------------- Modo Sleep
+void BK4819::BK4819_Sleep(void)
+{
+	BK4819_Write_Register(0x30, 0);
+	
+	// DSP Voltage Setting = 1			1 
+	
+	// ANA LDO = 2.7v					1
+	// VCO LDO = 2.7v					1
+	// RF LDO  = 2.7v					0
+	// PLL LDO = 2.7v					1
+	
+	// ANA LDO bypass					0
+	// VCO LDO bypass					0
+	// RF LDO  bypass					0
+	// PLL LDO bypass					0
+	
+	// Reserved bit is 1 instead of 0	0
+	// Enable  DSP						0
+	// Enable  XTAL						0
+	// Enable  Band Gap					0
+	//
+	BK4819_Write_Register(0x37, 0x1D00);
+}
+
+// ---------------------------------------------------- disabilita ricezione DTMF
+void BK4819::BK4819_Disable_DTMF(void)
+{
+	// REG_24
+	// --------------------------------
+	// <5>		0		DTMF/SelCall enable:
+										// 1: Enable
+										// 0: Disable
+										
+	// <4>		1		DTMF or SelCall detection mode:
+										// 1: DTMF
+										// 0: SelCall
+										
+    // <3:0>	0xe		Max. symbol number for SelCall detection
+   
+	BK4819_Write_Register(0x24, 0);
+	
+	uint16_t InterruptMask = BK4819_Read_Register(0x3F);		// Legge registro interrupt
+	InterruptMask &= ~BK4819_REG_3F_DTMF_5TONE_FOUND;			// disabilita eventuale interrupt ricezione
+	
+	BK4819_Write_Register(0x3F, InterruptMask);					// Registro Mascheramento interrupt
+}
+
+// ******************************************************************************************************************************
+//																											 SEZIONE TRASMISSIONE
+// ******************************************************************************************************************************
+
+// ---------------------------------------------------- Abilita audio microfono
+void BK4819::BK4819_Enable_Mic ( uint8_t MIC_SENSITIVITY_TUNING )
+{
+	BK4819_Disable_DTMF();						// se la DTMF e' abilitata in trasmissione altera la modulazione restringendo la BW audio
+	
+	BK4819_Write_Register(0x7D, 0xE940 | (MIC_SENSITIVITY_TUNING & 0x1f));	// MIC sensitivity tuning, 0.5 dB/step
+																			// 0 	= min
+																			// 0x1F = max
+																
+	BK4819_Write_Register(0x19, 0x1041);		// Automatic MIC PGA Gain Controller 
+												//   5432109876543210
+/* 			 			 0		   |			// 0b0001000001000001);     
+						(0u << 15) |     		// <15> MIC AGC  1 = disable  0 = enable
+						(1u	<< 12) |			// ?
+						(1u	<< 6 ) |			// ?
+						(1u << 0 ));			// ? 
+					
+					// 5432 1098 7654 3210			
+					// 0
+					//    1 
+					// 			  1	
+					// 	                 1
+					// ___________________
+					// 0001 0000 0100 0001
+*/										
+										
+}
+
+// ---------------------------------------------------- Abilita Finale alla trasmissione		
+void BK4819::BK4819_Set_Power_Amplifier(const uint8_t bias, uint8_t gain1, uint8_t gain2, bool enable)
+{
+	// REG_36 <15:8> 0 PA Bias output 0 ~ 3.2V
+	//               255 = 3.2V
+	//                 0 = 0V
+	//
+	// REG_36 <7>    0
+	//               1 = Enable PA-CTL output
+	//               0 = Disable (Output 0 V)
+	//
+	// REG_36 <5:3>  7 PA gain 1 tuning
+	//               7 = max
+	//               0 = min
+	//
+	// REG_36 <2:0>  7 PA gain 2 tuning
+	//               7 = max
+	//               0 = min
+	//
+	//                                  280MHz       gain 1 = 1  gain 2 = 0  gain 1 = 4  gain 2 = 2
+	// const uint8_t gain = (frequency < 28000000) ? (1u << 3) | (0u << 0) : (4u << 3) | (2u << 0);
+	//const uint8_t gain = (frequency < 28000000) ? (4u << 3) | (4u << 0) : (4u << 3) | (2u << 0);
+
+	BK4819_Write_Register(0x36, (bias << 8) | (enable << 7) | (gain1 << 3) | (gain2 << 0));
+}
+
+// ---------------------------------------------------- 
+void BK4819::BK4819_Enable_TXLink(void)
+{
+	BK4819_Write_Register(0x30, 0 |
+			BK4819_REG_30_ENABLE_VCO_CALIB |	// <15>
+			BK4819_REG_30_ENABLE_UNKNOWN   |	// <14>
+			BK4819_REG_30_DISABLE_RX_LINK  |	// <13:10>
+			BK4819_REG_30_ENABLE_AF_DAC    |	// <9>
+			BK4819_REG_30_ENABLE_DISC_MODE |	// <8>
+			BK4819_REG_30_ENABLE_PLL_VCO   |	// <7:4>
+			BK4819_REG_30_ENABLE_PA_GAIN   |	// <3>
+			BK4819_REG_30_DISABLE_MIC_ADC  |	// <2>
+			BK4819_REG_30_ENABLE_TX_DSP    |	// <1>
+			BK4819_REG_30_DISABLE_RX_DSP);		// <0>
+	
+}
+
+// ---------------------------------------------------- 
+void BK4819::BK4819_Disable_TXLink(void)
+{
+	BK4819_Write_Register(0x30, 0xC1FE);   // 1 1 0000 0 1 1111 1 1 1 0	
+
+/* 	BK4819_Write_Register(0x30, 0  		   |
+			BK4819_REG_30_ENABLE_VCO_CALIB |	// <15>
+//			BK4819_REG_30_ENABLE_UNKNOWN   |    // <14>
+			BK4819_REG_30_ENABLE_RX_LINK   |    // <13:10>
+			BK4819_REG_30_ENABLE_AF_DAC    |    // <9>
+			BK4819_REG_30_ENABLE_DISC_MODE |    // <8>
+			BK4819_REG_30_ENABLE_PLL_VCO   |    // <7:4>
+//			BK4819_REG_30_ENABLE_PA_GAIN   |    // <3>
+//			BK4819_REG_30_ENABLE_MIC_ADC   |    // <2>
+//			BK4819_REG_30_ENABLE_TX_DSP    |    // <1>
+			BK4819_REG_30_ENABLE_RX_DSP); */    // <0>
+}
+
+// ---------------------------------------------------- Deviazione trasmissione
+void BK4819::BK4819_Set_TxDeviation ( uint16_t value )
+{
+	// REG_40   RF TxDeviation.
+	// <13>		1   abilita i toni DCS ( non documentato se messo a 0 non funzionano piu' )
+	// <12>		1	Enable RF TxDeviation.  1=Enable; 0=Disable
+	//
+	// <11:0>	4D0	RF Tx Deviation Tuning (Apply for both in-band signal and sub-audio signal). 0=min; 0xFFF=max 
+	
+	if (value == 0)	BK4819_Write_Register(0x40,(2u << 12) | (value & 0xFFF));	// con zero disabilita la deviazione in trasmissione
+	else 			BK4819_Write_Register(0x40,(3u << 12) | (value & 0xFFF));	// con qualsiasi altro valore la abilita.
+}
+
+// ---------------------------------------------------- Mute Audio Tx per invio toni o altro
+void BK4819::BK4819_Mute_Tx(bool mute)
+{
+
+	// REG_50
+	// 			<15>	0		Enable AF TX mute (for DTMF TX or other applications):
+	// 																					1: Mute
+	// 																					0: Normal
+
+	if(mute) BK4819_Write_Register(0x50, 0xBB20);	// mute TX
+	else 	 BK4819_Write_Register(0x50, 0x3B20);	// Un-mute TX	
+}
+
+// ---------------------------------------------------- 
+/*
+void BK4819_Exit_Bypass(void)
+{
+	BK4819_Set_AF(AF_MUTE);							// disabilita ricezione
+
+	// REG_7E
+	//
+	// <15>    0 AGC fix mode
+	//         1 = fix
+	//         0 = auto
+	//
+	// <14:12> 3 AGC fix index
+	//         3 ( 3) = max
+	//         2 ( 2)
+	//         1 ( 1)
+	//         0 ( 0)
+	//         7 (-1)
+	//         6 (-2)
+	//         5 (-3)
+	//         4 (-4) = min
+	//
+	// <11:6>  0 ???
+	//
+	// <5:3>   5 DC filter band width for Tx (MIC In)
+	//         0 ~ 7
+	//         0 = bypass DC filter
+	//
+	// <2:0>   6 DC filter band width for Rx (I.F In)
+	//         0 ~ 7
+	//         0 = bypass DC filter
+	//
+	
+	BK4819_Write_Register(0x7E, (gAGCfix << 15) | (gAGCidx << 12) | (5u << 3) | (6u << 0));
+		// (0u << 15) |      // 0  AGC fix mode
+		// (3u << 12) |      // 3  AGC fix index
+		// (5u <<  3) |      // 5  DC Filter band width for Tx (MIC In)
+		// (6u <<  0));      // 6  DC Filter band width for Rx (I.F In) 
+	
+	
+	// BK4819_Write_Register(BK4819_REG_7E, // 0x302E);   // 0 011 000000 101 110
+		// (0u << 15) |      // 0  AGC fix mode
+		// (3u << 12) |      // 3  AGC fix index
+		// (5u <<  3) |      // 5  DC Filter band width for Tx (MIC In)
+		// (6u <<  0));      // 6  DC Filter band width for Rx (I.F In) 
+}
+*/
+
+// ---------------------------------------------------- 
+void BK4819::BK4819_Prepare_Transmit(void)
+{
+	// BK4819_Exit_Bypass();
+	BK4819_Set_Power_Amplifier(0, 2, 2, 1);
+	BK4819_Mute_Tx(false);
+	BK4819_TxOn();
+}
+
+// ---------------------------------------------------- 
+void BK4819::BK4819_TxOn(void)
+{
+	// Register 37
+	// DSP Voltage Setting = 1			1 
+	
+	// ANA LDO = 2.7v					1
+	// VCO LDO = 2.7v					1
+	// RF LDO  = 2.4v					0
+	// PLL LDO = 2.7v					1
+	
+	// ANA LDO bypass					0
+	// VCO LDO bypass					0
+	// RF LDO  bypass					0
+	// PLL LDO bypass					0
+	
+	// Reserved bit is 1 instead of 0	1
+	// Enable  DSP						1
+	// Enable  XTAL						1
+	// Enable  Band Gap					1
+	//
+	BK4819_Write_Register(0x37, 0x1D0F);
+	BK4819_Write_Register(0x30, 0x0000);	// Turn OFF
+	BK4819_Write_Register(0x30, 0xC1FE);	// Turn ON TX
+}
+

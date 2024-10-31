@@ -253,7 +253,7 @@ enum {
 #define BK4819_REG_70_MASK_ENABLE_TONE2		(0x01U << BK4819_REG_70_SHIFT_ENABLE_TONE2)
 #define BK4819_REG_70_MASK_TONE2_TUNING_GAIN	(0x7FU << BK4819_REG_70_SHIFT_TONE2_TUNING_GAIN)
 
-
+// ----------------------------------------------------
 enum BK4819_Filter_status_t
 {
 	RX_OFF_TX_OFF = 0,
@@ -262,18 +262,19 @@ enum BK4819_Filter_status_t
 };
 typedef enum BK4819_Filter_status_t BK4819_Filter_status_t;
 
+// ----------------------------------------------------
 enum AF_Type_t
 {
 	AF_MUTE      =  0u,  // Mute
 	AF_FM        =  1u,  // FM
 	AF_TONE      =  2u,  // Tone
 	AF_BEEP      =  3u,  // Beep for TX
-	AF_RAW 		=  4u,  // raw (ssb without if filter = raw in sdr sharp)
-	AF_DSB 		=  5u,  // dsb (or ssb = lsb and usb at the same time)
+	AF_RAW 		 =  4u,  // raw (ssb without if filter = raw in sdr sharp)
+	AF_DSB 		 =  5u,  // dsb (or ssb = lsb and usb at the same time)
 	AF_CTCOUT    =  6u,  // ctcss/dcs (fm with narrow filters for ctcss/dcs)
 	AF_AM        =  7u,  // AM
 	AF_FSKOUT    =  8u,  // fsk out test with special fsk filters (need reg58 fsk on to give sound on speaker ) // nothing
-	AF_BYPASS  	=  9u,  // bypass (fm without filter = discriminator output) // distorted
+	AF_BYPASS  	 =  9u,  // bypass (fm without filter = discriminator output) // distorted
 	AF_UNKNOWN4  = 10u,  // nothing at all
 	AF_UNKNOWN5  = 11u,  // distorted
 	AF_UNKNOWN6  = 12u,  // distorted
@@ -283,6 +284,7 @@ enum AF_Type_t
 };
 typedef enum AF_Type_t AF_Type_t;
 
+// ----------------------------------------------------
 enum BK4819_Filter_Bandwidth_t
 {
 	BK4819_FILTER_BW_26k = 0,	//	"W 26k",	//0
@@ -298,6 +300,7 @@ enum BK4819_Filter_Bandwidth_t
 };
 typedef enum BK4819_Filter_Bandwidth_t BK4819_Filter_Bandwidth_t;
 
+// ----------------------------------------------------
 enum BK4819_Css_Scan_Result_t
 {
 	BK4819_CSS_RESULT_NOT_FOUND = 0,
@@ -306,6 +309,7 @@ enum BK4819_Css_Scan_Result_t
 };
 typedef enum BK4819_Css_Scan_Result_t BK4819_Css_Scan_Result_t;
 
+// ----------------------------------------------------
 enum BK4819_AGC_t
 {
 	AGC_AUTO = 0,
@@ -316,6 +320,7 @@ enum BK4819_AGC_t
 };
 typedef enum BK4819_AGC_t BK4819_AGC_t;
 
+// ----------------------------------------------------
 typedef struct
 {
     uint16_t reg_val;
@@ -323,13 +328,13 @@ typedef struct
 	
 } t_gain_table;
 
+// ----------------------------------------------------
 typedef struct
 {
 	uint8_t AFmode;
 } t_Vfo_Data;	
 
-
-
+// ----------------------------------------------------
 enum BK4819_Xtal_t
 {
 	XTAL26M = 0,
@@ -341,7 +346,7 @@ enum BK4819_Xtal_t
 };
 typedef enum BK4819_Xtal_t BK4819_Xtal_t;
 
-
+// ----------------------------------------------------
 enum BK4819_IRQType_t
 {
 	FSK_RX_Sync = 2,
@@ -363,7 +368,7 @@ enum BK4819_IRQType_t
 };
 typedef enum BK4819_IRQType_t BK4819_IRQType_t;	
 	
-	
+// ----------------------------------------------------	
 enum BK4819_SquelchMode_t
 {
 	RSSI_NOISE_GLITCH = 0x88,
@@ -373,41 +378,57 @@ enum BK4819_SquelchMode_t
 };
 typedef BK4819_SquelchMode_t BK4819_SquelchMode_t;	
 
-
-
-
-
+// ----------------------------------------------------
 // Definizione della classe BK4819 per Arduino
-class BK4819 
-{
-public:
-    BK4819(int csPin, int MosiPin, int MisoPin, int sckPin);
-    void BK4819_Write_Register(uint16_t address, uint16_t data);
-    uint16_t BK4819_Read_Register(uint16_t address);  
-    void BK4819_Init();  // Dichiara qui la funzione
-	void BK4819_RX_TurnOn(void);
-    void BK4819_SoftReset();
-    void BK4819_Set_Filter_Bandwidth(const BK4819_Filter_Bandwidth_t bandwidth);
-    void BK4819_Init_AGC();
-    void BK4819_Set_AF(AF_Type_t af);
-	void BK4819_Clear_Interrupt( void );
-	void BK4819_Set_Frequency(uint32_t Frequency);
-	void BK4819_Set_AGC_Gain(uint8_t Agc, uint8_t Value);
-	void BK4819_Set_Xtal(BK4819_Xtal_t mode);
-	void BK4819_RF_Set_Agc(u8 mode);
-	void BK4819_Set_AFC(uint8_t value);
-	void BK4819_Set_Squelch(uint8_t Squelch_Open_RSSI,uint8_t Squelch_Close_RSSI,uint8_t Squelch_Open_Noise,uint8_t Squelch_Close_Noise,uint8_t Squelch_Close_Glitch,uint8_t Squelch_Open_Glitch );
-    BK4819_IRQType_t BK4819_Check_Irq_type( void );
-	void BK4819_Squelch_Mode ( BK4819_SquelchMode_t mode );
-	void BK4819_IRQ_Set (BK4819_IRQType_t InterruptMask);
-	int16_t BK4819_Get_RSSI (void);
+// ----------------------------------------------------
+	class BK4819 
+	{
+		public:
+			BK4819(int csPin, int MosiPin, int MisoPin, int sckPin);
+			
+			BK4819_IRQType_t BK4819_Check_Irq_type( void );
+			
+			uint16_t BK4819_Read_Register(uint16_t address);  
+			
+			int16_t BK4819_Get_RSSI (void);
+			
+			void BK4819_Write_Register(uint16_t address, uint16_t data);
+			void BK4819_Init();  // Dichiara qui la funzione
+			void BK4819_RX_TurnOff(void);
+			void BK4819_RX_TurnOn(void);
+			void BK4819_Sleep(void);
+			void BK4819_SoftReset();
 
+			void BK4819_Clear_Interrupt( void );
+			void BK4819_IRQ_Set (BK4819_IRQType_t InterruptMask);
+			void BK4819_Set_Filter_Bandwidth(const BK4819_Filter_Bandwidth_t bandwidth);
+			
+			void BK4819_Init_AGC();
+			void BK4819_Set_AF(AF_Type_t af);
+			void BK4819_Set_Frequency(uint32_t Frequency);
+			void BK4819_Set_AGC_Gain(uint8_t Agc, uint8_t Value);
+			void BK4819_Set_TxDeviation ( uint16_t value );
+			void BK4819_Set_Xtal(BK4819_Xtal_t mode);
+			void BK4819_RF_Set_Agc(u8 mode);
+			void BK4819_Set_AFC(uint8_t value);
+			void BK4819_Set_Squelch(uint8_t Squelch_Open_RSSI,uint8_t Squelch_Close_RSSI,uint8_t Squelch_Open_Noise,uint8_t Squelch_Close_Noise,uint8_t Squelch_Close_Glitch,uint8_t Squelch_Open_Glitch );
+			void BK4819_Squelch_Mode ( BK4819_SquelchMode_t mode );
+			
+			void BK4819_Disable_DTMF(void);
+			
+			void BK4819_Enable_Mic ( uint8_t MIC_SENSITIVITY_TUNING );
+			void BK4819_Set_Power_Amplifier(const uint8_t bias, uint8_t gain1, uint8_t gain2, bool enable);
+			void BK4819_Enable_TXLink(void);
+			void BK4819_Disable_TXLink(void);
+			void BK4819_Mute_Tx(bool mute);
+			void BK4819_Prepare_Transmit(void);
+			void BK4819_TxOn(void);
 
-private:
-    int _csPin;
-    int _MosiPin;
-	int _MisoPin;
-    int _sckPin;
-};
+		private:
+			int _csPin;
+			int _MosiPin;
+			int _MisoPin;
+			int _sckPin;
+	};
 
 #endif
