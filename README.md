@@ -1,14 +1,13 @@
-# BK4819 Arduino Library
-
-<img src="images/Board X.jpg" alt="Board X" style="display: block; margin-left: auto; margin-right: auto; width: 50%;">
+# IcomSim Arduino Library
 
 ## Description
-This is an Arduino library for interfacing with the **Beken BK4819** radio module. The library allows easy control and communication with the BK4819 tool, providing functions to handle various radio operations.
+This is an Arduino library for simulating the **Icom CI-V protocol**. The library allows the Arduino board to emulate an Icom-compatible radio, providing a way to integrate with CI-V based control systems and communicate with existing radio equipment.
 
 ## Features
-- Full control of BK4819 radio functionalities.
+- Simulates the Icom CI-V protocol for Arduino.
+- Enables the Arduino to be recognized as an Icom radio by other CI-V devices.
 - Easy integration with Arduino projects.
-- Example sketches provided for quick start.
+- Example sketches provided to help you get started quickly.
 
 ## Installation
 To install the library:
@@ -23,27 +22,26 @@ To install the library:
 Include the library in your sketch:
 
 ```cpp
-#include <BK4819.h>
+#include <IcomSim.h>
 
-BK4819 beken(10, 11, 12, 13);   // Passa i pin CS, MOSI, MISO, e SCK
+IcomSim icom;   // Create an instance of IcomSim
 
 void setup() 
 {
-    beken.BK4819_Init(); 
+    Serial.begin(9600);     // Initialize serial communication
+    IcomSim radio(Serial);  // Initialize IcomSim for communication
+}
+
+void loop() 
+{
+  radio.processCIVCommand();
+
+  switch(radio.isChanged())
+  {
+    .....
+  }
 }
 ```
-
-## Examples
-The library comes with several example sketches to help you get started. You can find them in the **examples** folder of the library:
-
-- **Radio_base**: Demonstrates how to set the Bk4819 module.
-
-To load an example, go to **File** > **Examples** > **BK4819** in the Arduino IDE.
-
-## Dependencies
-This library requires the following additional libraries:
-- **IcomSYM**: To handle CI-V protocol commands.
-- **TaskScheduler**: For managing asynchronous tasks in the examples.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
