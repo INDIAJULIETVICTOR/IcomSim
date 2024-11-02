@@ -36,12 +36,12 @@ SoftwareSerial debugSerial(RX_PIN, TX_PIN);
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
-IcomSim::IcomSim(Stream& serial)
+IcomSim::IcomSim(Stream& serial, uint32_t frequenza, uint8_t modo, uint8_t squelch)
 {
     serialPort = &serial;
-    currentFrequency = 145000000UL;  	// Frequenza iniziale 145 MHz
-    currentMode = 1;              		// Modalità iniziale FM
-    currentSql = 1;              		// Modalità iniziale Squelch
+    currentFrequency = frequenza;  			// Frequenza iniziale 145 MHz
+    currentMode = modo;              		// Modalità iniziale FM
+    currentSql = squelch;              		// Modalità iniziale Squelch
     frequencyChanged = false;
     modeChanged = false;
     SqlChanged = false;

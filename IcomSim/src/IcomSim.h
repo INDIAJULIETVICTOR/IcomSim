@@ -38,7 +38,7 @@
 	class IcomSim 
 	{
 	public:
-		IcomSim(Stream& serial); 
+		IcomSim(Stream& serial, uint32_t frequenza, uint8_t modo, uint8_t squelch);
 		void Initialize(uint32_t frequency, uint8_t mode, uint8_t squelch);
 		void processCIVCommand();
 		void send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo);
