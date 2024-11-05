@@ -31,35 +31,78 @@
 
 #define COMMAND_GET_FREQUENCY 0x03
 #define COMMAND_SET_FREQUENCY 0x05
-#define COMMAND_SET_MODE 0x06
-#define COMMAND_SET_SQUELCH 0x14
-#define COMMAND_GET_SQUELCH 0x15
+#define COMMAND_SET_MODE      0x06
+#define COMMAND_SET_SQUELCH   0x14
+#define COMMAND_GET_SQUELCH   0x15
+#define COMMAND_SET_AGC  	  0x16
+#define COMMAND_SET_STEP 	  0x17
+#define COMMAND_SET_SCAN 	  0x18
+#define COMMAND_GET_RSSI 	  0x19
+#define COMMAND_SET_MONITOR   0x1A
+#define COMMAND_SET_RFGAIN 	  0x1C
+#define COMMAND_GET_RFGAIN 	  0x1D
 
-	class IcomSim 
-	{
-	public:
-		IcomSim(Stream& serial);
-		void Initialize(uint32_t frequency, uint8_t mode, uint8_t squelch);
-		void processCIVCommand();
-		void send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo);
-		void send_squelch(uint8_t squelch, uint8_t addressFrom, uint8_t addressTo);
-		void IcomSim::Debug_Print(const char *format, ...);
-		
-		uint8_t isChanged();
-		
-		uint32_t getFrequency();
-		uint8_t getMode();
-		uint8_t getSquelch();
 
-	private:
-		Stream* serialPort; 
-		uint32_t currentFrequency;
-		uint8_t currentMode;
-		uint8_t currentSql;
-		bool frequencyChanged;
-		bool modeChanged;
-		bool SqlChanged;
-		void sendResponse(const String& response);
-	};
+#define AGC_AUTO 0
+#define AGC_MAN  1
+#define AGC_SLOW 2
+#define AGC_NOR  3
+#define AGC_FAST 4
+
+// Definizione della struttura per le variabili di stato della radio
+typedef struct 
+{
+    uint32_t Frequency;   // Frequenza corrente (es. 145 MHz)
+	uint16_t step;
+    uint8_t Mode;         // Modalità corrente (FM, AM, SSB, ecc.)
+	uint8_t AGC;
+    uint8_t Gain;         // Guadagno RF corrente
+    uint8_t Sql;          // Livello Squelch corrente
+} VfoData_t;
+
+
+#define FLAG_FREQUENCY_CHANGED 0x01  // 00000001
+#define FLAG_MODE_CHANGED      0x02  // 00000010
+#define FLAG_SQL_CHANGED       0x04  // 00000100
+#define FLAG_GAIN_CHANGED      0x08  // 00001000  
+
+typedef struct
+{
+	bool frequencyChanged;       // Flag per indicare se la frequenza è stata modificata
+    bool modeChanged;            // Flag per indicare se la modalità è stata modificata
+	bool sqlChanged;             // Flag per indicare se lo squelch è stato modificato
+    bool gainChanged;            // Flag per indicare se il guadagno è stato modificato
+    
+} Flags_t;
+
+class IcomSim 
+{
+public:
+	IcomSim(Stream& serial);
+	void Initialize(const VfoData_t& initData);
+
+	void processCIVCommand();
+	void send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo);
+	void send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo);
+	void send_squelch(uint8_t squelch, uint8_t addressFrom, uint8_t addressTo);
+	void send_rfgain(uint8_t rfgain, uint8_t addressFrom, uint8_t addressTo);
+	
+	void Debug_Print(const char *format, ...);
+	
+	uint16_t isChanged();
+	
+	uint32_t getFrequency();
+	uint8_t getMode();
+	uint8_t getSquelch();
+	uint8_t getGain();
+	
+
+private:
+	Stream* serialPort; 
+	VfoData_t VfoData;  		// Variabile membro per i dati della radio
+	Flags_t Flags;  			// Variabile membro per i flag di stato
+	
+	void sendResponse(const String& response);
+};
 #endif
 

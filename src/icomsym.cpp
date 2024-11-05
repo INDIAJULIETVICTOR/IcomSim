@@ -33,32 +33,39 @@ SoftwareSerial debugSerial(RX_PIN, TX_PIN);
       // MODE_FM = 0x01   # Codice per FM
       // MODE_SSB = 0x02  # Codice per SSB
 
-// ******************************************************************************************************************************
-//
-// ******************************************************************************************************************************
-IcomSim::IcomSim(Stream& serial)
-{
-    serialPort = &serial;
-    currentFrequency = 0;  					// Frequenza iniziale 145 MHz
-    currentMode = 0;              			// Modalità iniziale FM
-    currentSql = 0;              			// Modalità iniziale Squelch
-    frequencyChanged = false;
-    modeChanged = false;
-    SqlChanged = false;
-}
+
 
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
-void IcomSim::Initialize(uint32_t frequency, uint8_t mode, uint8_t squelch) 
+
+// Costruttore della classe IcomSim
+IcomSim::IcomSim(Stream& serial)
 {
-	debugSerial.begin(9600); // Inizializza la seriale software per il debug
-    debugSerial.println("Debug Serial Attivata");
-	
-	currentFrequency = frequency;  			// Frequenza iniziale 
-    currentMode = mode;              		// Modalità iniziale 
-    currentSql = squelch;              		// Modalità iniziale 
+    serialPort = &serial;
+
+    // Inizializza le variabili membro Vfodata e Flags a zero
+    memset(&VfoData, 0, sizeof(VfoData_t));
+    memset(&Flags, 0, sizeof(Flags_t));
 }
+
+
+// ******************************************************************************************************************************
+// Funzione di inizializzazione che accetta una struttura di dati iniziale
+// ******************************************************************************************************************************
+void IcomSim::Initialize(const VfoData_t& initData)
+{
+    debugSerial.begin(9600); // Inizializza la seriale software per il debug
+    debugSerial.println("Debug Serial Attivata");
+
+    // Assegna direttamente la struttura di dati iniziale alla variabile membro Vfodata
+    VfoData = initData;
+
+    // Resetta tutti i flag 
+    memset(&Flags, 0, sizeof(Flags_t));
+}
+
+
 
 // ******************************************************************************************************************************
 //
@@ -137,8 +144,8 @@ void IcomSim::processCIVCommand()
                                     frequency = (frequency * 100) + (high_nibble * 10) + low_nibble;
                                 }
 
-                                currentFrequency = frequency;
-                                frequencyChanged = true;
+                                VfoData.Frequency = frequency;
+                                Flags.frequencyChanged = true;
 
                                 // Debug: stampa la frequenza decodificata
                                 // Debug_Print("Frequenza decodificata (Hz): %ld\n\r", currentFrequency);
@@ -147,34 +154,48 @@ void IcomSim::processCIVCommand()
 							
 						// ---------------------------------------------------- 	
 						case COMMAND_GET_FREQUENCY:
-							send_frequency(currentFrequency,addressFrom, addressTo);
+							send_frequency(VfoData.Frequency,addressFrom, addressTo);
 							break;
 
 						// ---------------------------------------------------- 
                         case COMMAND_SET_SQUELCH:
                             if (dataLength > 0)
                             {
-                                currentSql = data[0];
-                                SqlChanged = true;
+                                VfoData.Sql = data[0];
+                                Flags.sqlChanged = true;
                                 // Debug_Print("Livello di squelch decodificato: %d\n\r", currentSql);
                             }
                             break;
 							
 						// ---------------------------------------------------- 	
 						case COMMAND_GET_SQUELCH:
-							send_squelch(currentSql, addressFrom, addressTo);
+							send_squelch(VfoData.Sql, addressFrom, addressTo);
 							break;	
 
 						// ---------------------------------------------------- 
                         case COMMAND_SET_MODE:
                             if (dataLength > 0)
                             {
-                                currentMode = data[0];
-                                modeChanged = true;
+                               VfoData.Mode = data[0];
+                               Flags.modeChanged = true;
                             }
                             break;							
 
-
+						// ---------------------------------------------------- 
+                        case COMMAND_SET_RFGAIN:
+						    // Debug_Print("%d\r\n",data[0]);
+                            if (dataLength > 0)
+                            {
+                                VfoData.Gain = data[0];
+                                Flags.gainChanged = true;
+                            }
+                            break;
+							
+						// ---------------------------------------------------- 	
+						case COMMAND_GET_RFGAIN:
+							send_rfgain(VfoData.Gain, addressFrom, addressTo);
+							break;	
+							
 						// ---------------------------------------------------- 
                         default:
                             debugSerial.println("Comando CI-V non riconosciuto.");
@@ -227,7 +248,7 @@ void IcomSim::send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t ad
         serialPort->write(frequencyData[i]);
     }
     serialPort->write(0xFD);  					// Byte di fine messaggio
-}	
+}
 
 // ******************************************************************************************************************************
 //
@@ -240,9 +261,41 @@ void IcomSim::send_squelch(uint8_t squelch, uint8_t addressFrom, uint8_t address
     serialPort->write(addressTo);
     serialPort->write(COMMAND_GET_SQUELCH);  // Comando di risposta
 
-    serialPort->write(currentSql);
+    serialPort->write(VfoData.Sql);
     serialPort->write(0xFD);  // Byte di fine messaggio
 }
+
+
+// ******************************************************************************************************************************
+//
+// ******************************************************************************************************************************
+void IcomSim::send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo)
+{
+    serialPort->write(0xFE);
+    serialPort->write(0xFE);
+    serialPort->write(addressFrom);
+    serialPort->write(addressTo);
+    serialPort->write(COMMAND_GET_RSSI);  // Comando di risposta
+
+    serialPort->write(rssi & 0xFF);
+    serialPort->write(0xFD);  // Byte di fine messaggio
+}
+
+// ******************************************************************************************************************************
+//
+// ******************************************************************************************************************************
+void IcomSim::send_rfgain(uint8_t rfgain, uint8_t addressFrom, uint8_t addressTo)
+{
+    serialPort->write(0xFE);
+    serialPort->write(0xFE);
+    serialPort->write(addressFrom);
+    serialPort->write(addressTo);
+    serialPort->write(COMMAND_GET_RFGAIN);  // Comando di risposta
+
+    serialPort->write(rfgain & 0xFF);
+    serialPort->write(0xFD);  // Byte di fine messaggio
+}
+
 
 // ******************************************************************************************************************************
 //
@@ -255,31 +308,60 @@ void IcomSim::sendResponse(const String& response)
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
-uint8_t IcomSim::isChanged()
+
+uint16_t IcomSim::isChanged()
 {
-    if (frequencyChanged) { frequencyChanged = false; return COMMAND_SET_FREQUENCY; }
-	if (modeChanged)      { modeChanged      = false; return COMMAND_SET_MODE;      }
-	if (SqlChanged)       { SqlChanged       = false; return COMMAND_SET_SQUELCH;   }
-	
-    return 0;
+    uint8_t changedFlags = 0; // Inizializza a 0, cioè nessun flag attivo
+
+    if (Flags.frequencyChanged) 
+	{
+        changedFlags |= FLAG_FREQUENCY_CHANGED; // Imposta il bit corrispondente
+        Flags.frequencyChanged = false;         // Resetta il flag
+    }
+
+    if (Flags.modeChanged) 
+	{
+        changedFlags |= FLAG_MODE_CHANGED; // Imposta il bit corrispondente
+        Flags.modeChanged = false;         // Resetta il flag
+    }
+
+    if (Flags.sqlChanged) 
+	{
+        changedFlags |= FLAG_SQL_CHANGED; // Imposta il bit corrispondente
+        Flags.sqlChanged = false;         // Resetta il flag
+    }
+
+    if (Flags.gainChanged) 
+	{
+        changedFlags |= FLAG_GAIN_CHANGED; // Imposta il bit corrispondente
+        Flags.gainChanged = false;         // Resetta il flag
+    }
+
+    return changedFlags; // Restituisci tutti i flag attivi (0 se nessuno è attivo)
 }
+
 
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
 uint8_t IcomSim::getMode()
 {
-	return currentMode;
+	return VfoData.Mode;
 }
 
 uint8_t IcomSim::getSquelch()
 {
-	return currentSql;
+	return VfoData.Sql;
+}
+
+uint8_t IcomSim::getGain()
+{
+	return VfoData.Gain;
 }
 
 uint32_t IcomSim::getFrequency()
 {
-	return currentFrequency;
+	return VfoData.Frequency;
 }
 
 // ******************************************************************************************************************************
