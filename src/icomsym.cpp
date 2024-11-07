@@ -226,44 +226,43 @@ void IcomSim::processCIVCommand()
 // ******************************************************************************************************************************
 void IcomSim::send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo)
 {
-    uint8_t frequencyData[5];
+    uint8_t message[15];
+    message[0] = 0xFE;
+    message[1] = 0xFE;
+    message[2] = addressFrom;
+    message[3] = addressTo;
+    message[4] = COMMAND_GET_FREQUENCY;  			// Comando di risposta per GET_FREQUENCY
 
     // Converti la frequenza in formato BCD (Binary Coded Decimal)
     for (int i = 4; i >= 0; i--) 
     {
-        frequencyData[i] = (frequency % 10) | ((frequency / 10 % 10) << 4);
+        message[5+i] = (frequency % 10) | ((frequency / 10 % 10) << 4);
         frequency /= 100;
     }
 
-    // Invia il messaggio CI-V con la frequenza codificata
-    serialPort->write(0xFE);
-    serialPort->write(0xFE);
-    serialPort->write(addressFrom);
-    serialPort->write(addressTo);
-    serialPort->write(COMMAND_GET_FREQUENCY);  	// Comando di risposta per GET_FREQUENCY
+    message[10] = 0xFD;  							// Byte di fine messaggio
 
-    // Invia i dati della frequenza (5 byte)
-    for (int i = 0; i < 5; i++) 
-    {
-        serialPort->write(frequencyData[i]);
-    }
-    serialPort->write(0xFD);  					// Byte di fine messaggio
+    sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
 }
+
 
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
 void IcomSim::send_squelch(uint8_t squelch, uint8_t addressFrom, uint8_t addressTo)
 {
-    serialPort->write(0xFE);
-    serialPort->write(0xFE);
-    serialPort->write(addressFrom);
-    serialPort->write(addressTo);
-    serialPort->write(COMMAND_GET_SQUELCH);  // Comando di risposta
+    uint8_t message[7];
+    message[0] = 0xFE;
+    message[1] = 0xFE;
+    message[2] = addressFrom;
+    message[3] = addressTo;
+    message[4] = COMMAND_GET_SQUELCH;  				// Comando di risposta per GET_SQUELCH
+    message[5] = squelch;
+    message[6] = 0xFD;  							// Byte di fine messaggio
 
-    serialPort->write(VfoData.Sql);
-    serialPort->write(0xFD);  // Byte di fine messaggio
+    sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
 }
+
 
 
 // ******************************************************************************************************************************
@@ -271,30 +270,88 @@ void IcomSim::send_squelch(uint8_t squelch, uint8_t addressFrom, uint8_t address
 // ******************************************************************************************************************************
 void IcomSim::send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo)
 {
-    serialPort->write(0xFE);
-    serialPort->write(0xFE);
-    serialPort->write(addressFrom);
-    serialPort->write(addressTo);
-    serialPort->write(COMMAND_GET_RSSI);  // Comando di risposta
+    uint8_t message[8];
+    message[0] = 0xFE;
+    message[1] = 0xFE;
+    message[2] = addressFrom;
+    message[3] = addressTo;
+    message[4] = COMMAND_GET_RSSI;  				// Comando di risposta
+													// Dividi il valore RSSI in due byte (LSB e MSB)
+    message[5] = rssi & 0xFF;       				// Byte meno significativo
+    message[6] = (rssi >> 8) & 0xFF; 				// Byte più significativo
 
-    serialPort->write(rssi & 0xFF);
-    serialPort->write(0xFD);  // Byte di fine messaggio
+    message[7] = 0xFD;  							// Byte di fine messaggio
+
+    sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
 }
+
 
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
 void IcomSim::send_rfgain(uint8_t rfgain, uint8_t addressFrom, uint8_t addressTo)
 {
-    serialPort->write(0xFE);
-    serialPort->write(0xFE);
-    serialPort->write(addressFrom);
-    serialPort->write(addressTo);
-    serialPort->write(COMMAND_GET_RFGAIN);  // Comando di risposta
+    uint8_t message[7];
+    message[0] = 0xFE;
+    message[1] = 0xFE;
+    message[2] = addressFrom;
+    message[3] = addressTo;
+    message[4] = COMMAND_GET_RFGAIN;  				// Comando di risposta per GET_RFGAIN
+    message[5] = rfgain & 0xFF;
+    message[6] = 0xFD;  							// Byte di fine messaggio
 
-    serialPort->write(rfgain & 0xFF);
-    serialPort->write(0xFD);  // Byte di fine messaggio
+    sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
 }
+
+
+// ******************************************************************************************************************************
+//
+// ******************************************************************************************************************************
+
+volatile bool serialInUse = false;
+
+void IcomSim::sendToSerial(const uint8_t* data, size_t length)
+{
+												// Definisci il timeout in microsecondi
+    const unsigned long timeout = 100000UL; 	// 100 millisecondi
+    unsigned long startTime = micros();
+												// Attendi il lock con timeout
+    while (serialInUse) 
+	{
+        if ((micros() - startTime) > timeout) 
+		{
+			serialInUse = false;				// Rilascia il lock
+            return 0;  							// Esci dalla funzione per evitare stallo
+        }
+    }
+	
+    serialInUse = true;							// Prendi il lock
+	
+    // Controllo se c'è spazio disponibile per scrivere sulla porta seriale
+    if (serialPort->availableForWrite() >= length)
+    {
+        for (size_t i = 0; i < length; i++)
+        {
+            serialPort->write(data[i]);
+        }
+
+        // Debug: stampa i dati inviati sulla seriale di debug
+        // debugSerial.print("Dati inviati: ");
+        // for (size_t i = 0; i < length; i++)
+        // {
+        // 	  debugSerial.printf("0x%02X ", data[i]);
+        // }
+        // debugSerial.println();
+    }
+    else
+    {
+        // Debug: Errore nel caso in cui non ci sia spazio sufficiente
+        debugSerial.println("Errore: spazio insufficiente sulla seriale per inviare i dati.");
+    }
+	serialInUse = false;						// Rilascia il lock
+}
+
+
 
 
 // ******************************************************************************************************************************

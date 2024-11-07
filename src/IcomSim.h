@@ -29,6 +29,9 @@
 #define CIV_START_BYTE 0xFE
 #define CIV_END_BYTE 0xFD
 
+#define CIV_ADDRESS_RADIO 0xE0
+#define CIV_ADDRESS_COMPUTER 0x00
+
 #define COMMAND_GET_FREQUENCY 0x03
 #define COMMAND_SET_FREQUENCY 0x05
 #define COMMAND_SET_MODE      0x06
@@ -52,6 +55,8 @@
 // Definizione della struttura per le variabili di stato della radio
 typedef struct 
 {
+	uint8_t scn_port;
+	uint8_t mute_port;
     uint32_t Frequency;   // Frequenza corrente (es. 145 MHz)
 	uint16_t step;
     uint8_t Mode;         // Modalità corrente (FM, AM, SSB, ecc.)
@@ -82,10 +87,13 @@ public:
 	void Initialize(const VfoData_t& initData);
 
 	void processCIVCommand();
+	
 	void send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo);
 	void send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo);
 	void send_squelch(uint8_t squelch, uint8_t addressFrom, uint8_t addressTo);
 	void send_rfgain(uint8_t rfgain, uint8_t addressFrom, uint8_t addressTo);
+	
+	void sendToSerial(const uint8_t* data, size_t length);
 	
 	void Debug_Print(const char *format, ...);
 	
