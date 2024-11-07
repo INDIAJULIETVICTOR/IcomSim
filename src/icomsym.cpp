@@ -132,8 +132,8 @@ void IcomSim::processCIVCommand()
                             {
                                 uint32_t frequency = 0;
 
-                                // Decodifica i 5 byte BCD ricevuti, invertendo l'ordine dei byte e i nibble
-                                for (int i = 4; i >= 0; i--)
+                                // Decodifica i 6 byte BCD ricevuti, invertendo l'ordine dei byte e i nibble
+                                for (int i = 5; i >= 0; i--)
                                 {
                                     // Inverti l'ordine dei nibble in ciascun byte
                                     uint8_t inverted_byte = (data[i] << 4) | (data[i] >> 4);
@@ -226,7 +226,7 @@ void IcomSim::processCIVCommand()
 // ******************************************************************************************************************************
 void IcomSim::send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo)
 {
-    uint8_t message[15];
+    uint8_t message[16];
     message[0] = 0xFE;
     message[1] = 0xFE;
     message[2] = addressFrom;
@@ -234,13 +234,13 @@ void IcomSim::send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t ad
     message[4] = COMMAND_GET_FREQUENCY;  			// Comando di risposta per GET_FREQUENCY
 
     // Converti la frequenza in formato BCD (Binary Coded Decimal)
-    for (int i = 4; i >= 0; i--) 
+    for (int i = 5; i >= 0; i--) 
     {
         message[5+i] = (frequency % 10) | ((frequency / 10 % 10) << 4);
         frequency /= 100;
     }
 
-    message[10] = 0xFD;  							// Byte di fine messaggio
+    message[11] = 0xFD;  							// Byte di fine messaggio
 
     sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
 }
