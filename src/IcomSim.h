@@ -44,7 +44,10 @@
 #define COMMAND_SET_MONITOR   0x1A
 #define COMMAND_SET_RFGAIN 	  0x1C
 #define COMMAND_GET_RFGAIN 	  0x1D
-
+#define COMMAND_SET_BANDWIDTH 0x1E
+#define COMMAND_GET_BANDWIDTH 0x1F
+#define COMMAND_SET_TX_POWER  0x20
+#define COMMAND_GET_TX_POWER  0x21
 
 #define AGC_AUTO 0
 #define AGC_MAN  1
@@ -63,6 +66,9 @@ typedef struct
 	uint8_t AGC;
     uint8_t Gain;         // Guadagno RF corrente
     uint8_t Sql;          // Livello Squelch corrente
+	uint8_t bw;
+	uint8_t txp;
+	
 } VfoData_t;
 
 
@@ -70,6 +76,9 @@ typedef struct
 #define FLAG_MODE_CHANGED      0x02  // 00000010
 #define FLAG_SQL_CHANGED       0x04  // 00000100
 #define FLAG_GAIN_CHANGED      0x08  // 00001000  
+#define FLAG_MONITOR_CHANGED   0x10  // 00010000  
+#define FLAG_BW_CHANGED        0x20  // 00100000 
+#define FLAG_TXP_CHANGED       0x40  // 01000000 
 
 typedef struct
 {
@@ -77,7 +86,10 @@ typedef struct
     bool modeChanged;            // Flag per indicare se la modalità è stata modificata
 	bool sqlChanged;             // Flag per indicare se lo squelch è stato modificato
     bool gainChanged;            // Flag per indicare se il guadagno è stato modificato
-    
+	bool monitorChanged;         // Flag per indicare che e' stato attivato o disattivato il monitor
+    bool bwChanged;         	 // Flag per indicare che la bw e' cambiata
+	bool txpChanged;             // Flag per indicare che la tx power e' cambiata
+	
 } Flags_t;
 
 class IcomSim 
@@ -90,8 +102,7 @@ public:
 	
 	void send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo);
 	void send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo);
-	void send_squelch(uint8_t squelch, uint8_t addressFrom, uint8_t addressTo);
-	void send_rfgain(uint8_t rfgain, uint8_t addressFrom, uint8_t addressTo);
+	void send_command(uint8_t command, uint8_t value, uint8_t addressFrom, uint8_t addressTo);
 	
 	void sendToSerial(const uint8_t* data, size_t length);
 	
@@ -103,6 +114,9 @@ public:
 	uint8_t getMode();
 	uint8_t getSquelch();
 	uint8_t getGain();
+	uint8_t getBw();
+	uint8_t getTxp();
+	
 	
 
 private:

@@ -126,7 +126,7 @@ void IcomSim::processCIVCommand()
                     // Elabora il comando ricevuto
                     switch (command)
                     {
-						// ---------------------------------------------------- 
+						// ---------------------------------------------------- FREQUENCY
                         case COMMAND_SET_FREQUENCY:
                             if (dataLength >= 5)
                             {
@@ -151,28 +151,25 @@ void IcomSim::processCIVCommand()
                                 // Debug_Print("Frequenza decodificata (Hz): %ld\n\r", currentFrequency);
                             }
                             break;
-							
-						// ---------------------------------------------------- 	
+	
 						case COMMAND_GET_FREQUENCY:
 							send_frequency(VfoData.Frequency,addressFrom, addressTo);
 							break;
 
-						// ---------------------------------------------------- 
+						// ---------------------------------------------------- SQUELCH
                         case COMMAND_SET_SQUELCH:
                             if (dataLength > 0)
                             {
                                 VfoData.Sql = data[0];
                                 Flags.sqlChanged = true;
-                                // Debug_Print("Livello di squelch decodificato: %d\n\r", currentSql);
                             }
                             break;
 							
-						// ---------------------------------------------------- 	
 						case COMMAND_GET_SQUELCH:
-							send_squelch(VfoData.Sql, addressFrom, addressTo);
+							send_command(command, VfoData.Sql, addressFrom, addressTo);
 							break;	
 
-						// ---------------------------------------------------- 
+						// ---------------------------------------------------- MODE
                         case COMMAND_SET_MODE:
                             if (dataLength > 0)
                             {
@@ -181,7 +178,7 @@ void IcomSim::processCIVCommand()
                             }
                             break;							
 
-						// ---------------------------------------------------- 
+						// ---------------------------------------------------- RFGAIN
                         case COMMAND_SET_RFGAIN:
 						    // Debug_Print("%d\r\n",data[0]);
                             if (dataLength > 0)
@@ -191,9 +188,41 @@ void IcomSim::processCIVCommand()
                             }
                             break;
 							
-						// ---------------------------------------------------- 	
 						case COMMAND_GET_RFGAIN:
-							send_rfgain(VfoData.Gain, addressFrom, addressTo);
+							send_command(command, VfoData.Gain, addressFrom, addressTo);
+							break;
+						
+						// ---------------------------------------------------- MONITOR
+						case COMMAND_SET_MONITOR:
+							Flags.monitorChanged = true;	
+							break;
+							
+						// ---------------------------------------------------- BANDWITH
+						case COMMAND_SET_BANDWIDTH:
+							if (dataLength > 0)
+                            {
+                                VfoData.bw = data[0];
+                                Flags.bwChanged = true;
+                            }
+                            break;
+						
+						
+						case COMMAND_GET_BANDWIDTH:
+							send_command(command, VfoData.bw, addressFrom, addressTo);
+							break;
+							
+						// ---------------------------------------------------- TXPOWER
+						case COMMAND_SET_TX_POWER:
+							if (dataLength > 0)
+                            {
+                                VfoData.txp = data[0];
+                                Flags.bwChanged = true;
+                            }
+                            break;
+						
+						
+						case COMMAND_GET_TX_POWER:
+							send_command(command, VfoData.txp, addressFrom, addressTo);
 							break;	
 							
 						// ---------------------------------------------------- 
@@ -224,6 +253,30 @@ void IcomSim::processCIVCommand()
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
+
+uint16_t IcomSim::isChanged()
+{
+    uint8_t changedFlags = 0; 											// Inizializza a 0, cioè nessun flag attivo
+
+    if (Flags.frequencyChanged) changedFlags |= FLAG_FREQUENCY_CHANGED; 
+    if (Flags.modeChanged)    	changedFlags |= FLAG_MODE_CHANGED; 		
+    if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
+    if (Flags.gainChanged)    	changedFlags |= FLAG_GAIN_CHANGED; 		
+	if (Flags.modeChanged)    	changedFlags |= FLAG_MODE_CHANGED; 		
+    if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
+    if (Flags.monitorChanged) 	changedFlags |= FLAG_MONITOR_CHANGED; 	
+    if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
+	if (Flags.bwChanged)     	changedFlags |= FLAG_BW_CHANGED; 		
+	if (Flags.txpChanged)     	changedFlags |= FLAG_TXP_CHANGED; 		
+	
+	memset(&Flags, 0, sizeof(Flags_t));
+
+    return changedFlags; // Restituisci tutti i flag attivi (0 se nessuno è attivo)
+}
+
+// ******************************************************************************************************************************
+//
+// ******************************************************************************************************************************
 void IcomSim::send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo)
 {
     uint8_t message[16];
@@ -245,30 +298,10 @@ void IcomSim::send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t ad
     sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
 }
 
-
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
-void IcomSim::send_squelch(uint8_t squelch, uint8_t addressFrom, uint8_t addressTo)
-{
-    uint8_t message[7];
-    message[0] = 0xFE;
-    message[1] = 0xFE;
-    message[2] = addressFrom;
-    message[3] = addressTo;
-    message[4] = COMMAND_GET_SQUELCH;  				// Comando di risposta per GET_SQUELCH
-    message[5] = squelch;
-    message[6] = 0xFD;  							// Byte di fine messaggio
-
-    sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
-}
-
-
-
-// ******************************************************************************************************************************
-//
-// ******************************************************************************************************************************
-void IcomSim::send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo)
+void IcomSim::send_rssi(uint16_t value, uint8_t addressFrom, uint8_t addressTo)
 {
     uint8_t message[8];
     message[0] = 0xFE;
@@ -277,32 +310,30 @@ void IcomSim::send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo)
     message[3] = addressTo;
     message[4] = COMMAND_GET_RSSI;  				// Comando di risposta
 													// Dividi il valore RSSI in due byte (LSB e MSB)
-    message[5] = rssi & 0xFF;       				// Byte meno significativo
-    message[6] = (rssi >> 8) & 0xFF; 				// Byte più significativo
+    message[5] = value & 0xFF;       				// Byte meno significativo
+    message[6] = (value >> 8) & 0xFF; 				// Byte più significativo
 
     message[7] = 0xFD;  							// Byte di fine messaggio
 
     sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
 }
 
-
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
-void IcomSim::send_rfgain(uint8_t rfgain, uint8_t addressFrom, uint8_t addressTo)
+void IcomSim::send_command(uint8_t command, uint8_t value, uint8_t addressFrom, uint8_t addressTo)
 {
     uint8_t message[7];
-    message[0] = 0xFE;
-    message[1] = 0xFE;
-    message[2] = addressFrom;
-    message[3] = addressTo;
-    message[4] = COMMAND_GET_RFGAIN;  				// Comando di risposta per GET_RFGAIN
-    message[5] = rfgain & 0xFF;
-    message[6] = 0xFD;  							// Byte di fine messaggio
+    message[0] = 0xFE;                        // Byte di inizio messaggio
+    message[1] = 0xFE;                        // Byte di inizio messaggio
+    message[2] = addressFrom;                 // Indirizzo del mittente
+    message[3] = addressTo;                   // Indirizzo del destinatario
+    message[4] = command;                     // Comando specifico passato come argomento
+    message[5] = value & 0xFF;                // Valore specifico passato come argomento
+    message[6] = 0xFD;                        // Byte di fine messaggio
 
-    sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
+    sendToSerial(message, sizeof(message));   // Invia il messaggio usando la funzione centralizzata
 }
-
 
 // ******************************************************************************************************************************
 //
@@ -362,45 +393,23 @@ void IcomSim::sendResponse(const String& response)
     serialPort->println(response);
 }
 
+
+
+
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
 
-uint16_t IcomSim::isChanged()
+uint8_t IcomSim::getBw()
 {
-    uint8_t changedFlags = 0; // Inizializza a 0, cioè nessun flag attivo
-
-    if (Flags.frequencyChanged) 
-	{
-        changedFlags |= FLAG_FREQUENCY_CHANGED; // Imposta il bit corrispondente
-        Flags.frequencyChanged = false;         // Resetta il flag
-    }
-
-    if (Flags.modeChanged) 
-	{
-        changedFlags |= FLAG_MODE_CHANGED; // Imposta il bit corrispondente
-        Flags.modeChanged = false;         // Resetta il flag
-    }
-
-    if (Flags.sqlChanged) 
-	{
-        changedFlags |= FLAG_SQL_CHANGED; // Imposta il bit corrispondente
-        Flags.sqlChanged = false;         // Resetta il flag
-    }
-
-    if (Flags.gainChanged) 
-	{
-        changedFlags |= FLAG_GAIN_CHANGED; // Imposta il bit corrispondente
-        Flags.gainChanged = false;         // Resetta il flag
-    }
-
-    return changedFlags; // Restituisci tutti i flag attivi (0 se nessuno è attivo)
+	return VfoData.bw;
 }
 
+uint8_t IcomSim::getTxp()
+{
+	return VfoData.txp;
+}
 
-// ******************************************************************************************************************************
-//
-// ******************************************************************************************************************************
 uint8_t IcomSim::getMode()
 {
 	return VfoData.Mode;
