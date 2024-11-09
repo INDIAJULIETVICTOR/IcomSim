@@ -216,7 +216,7 @@ void IcomSim::processCIVCommand()
 							if (dataLength > 0)
                             {
                                 VfoData.txp = data[0];
-                                Flags.bwChanged = true;
+                                Flags.txpChanged = true;
                             }
                             break;
 						
