@@ -23,9 +23,13 @@
 
 #include "IcomSim.h"
 #include <SoftwareSerial.h>
+#include <ArduinoQueue.h> 
+
 
 #define RX_PIN A3                                            // pin usati da softwareserial
 #define TX_PIN A4
+#define QUEUE_MAX_SIZE 10  // Dimensione massima della coda
+
 
 SoftwareSerial debugSerial(RX_PIN, TX_PIN);
 
@@ -33,6 +37,15 @@ SoftwareSerial debugSerial(RX_PIN, TX_PIN);
       // MODE_FM = 0x01   # Codice per FM
       // MODE_SSB = 0x02  # Codice per SSB
 
+// Struttura per memorizzare i messaggi da inviare
+struct SerialMessage 
+{
+    uint8_t data[32];
+    size_t length;
+};
+
+// Inizializza la coda con dimensione massima
+ArduinoQueue<SerialMessage> serialQueue(QUEUE_MAX_SIZE);
 
 
 // ******************************************************************************************************************************
@@ -339,9 +352,40 @@ void IcomSim::send_command(uint8_t command, uint8_t value, uint8_t addressFrom, 
 //
 // ******************************************************************************************************************************
 
-volatile bool serialInUse = false;
+void IcomSim::sendToSerial(const uint8_t* data, size_t length) 
+{
+    if (serialQueue.isFull()) 
+	{
+        debugSerial.println("Errore: coda di trasmissione piena");
+        return;
+    }
 
-void IcomSim::sendToSerial(const uint8_t* data, size_t length)
+    SerialMessage msg;
+    memcpy(msg.data, data, length);
+    msg.length = length;
+    serialQueue.enqueue(msg);
+}
+
+// Elabora la coda nel loop principale
+void IcomSim::processSerialQueue() 
+{
+    if (!serialQueue.isEmpty()) 
+	{
+        SerialMessage msg = serialQueue.dequeue();
+
+        if (serialPort->availableForWrite() >= msg.length) 
+		{
+            serialPort->write(msg.data, msg.length);
+            serialPort->flush();
+        } 
+		else 
+		{
+            debugSerial.println("Errore: spazio seriale insufficiente per il messaggio");
+        }
+    }
+}
+
+/* void IcomSim::sendToSerial(const uint8_t* data, size_t length)
 {
 												// Definisci il timeout in microsecondi
     const unsigned long timeout = 100000UL; 	// 100 millisecondi
@@ -381,7 +425,7 @@ void IcomSim::sendToSerial(const uint8_t* data, size_t length)
     }
 	serialInUse = false;						// Rilascia il lock
 }
-
+ */
 
 
 

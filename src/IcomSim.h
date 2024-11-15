@@ -106,6 +106,8 @@ public:
 	
 	void sendToSerial(const uint8_t* data, size_t length);
 	
+	void processSerialQueue();
+	
 	void Debug_Print(const char *format, ...);
 	
 	uint16_t isChanged();
