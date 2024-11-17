@@ -31,6 +31,8 @@
 #define QUEUE_MAX_SIZE 10  // Dimensione massima della coda
 
 
+uint8_t vfonum=0;
+
 SoftwareSerial debugSerial(RX_PIN, TX_PIN);
 
       // MODE_AM = 0x00   # Codice per AM
@@ -56,26 +58,31 @@ ArduinoQueue<SerialMessage> serialQueue(QUEUE_MAX_SIZE);
 IcomSim::IcomSim(Stream& serial)
 {
     serialPort = &serial;
-
-    // Inizializza le variabili membro Vfodata e Flags a zero
-    memset(&VfoData, 0, sizeof(VfoData_t));
-    memset(&Flags, 0, sizeof(Flags_t));
 }
 
 
 // ******************************************************************************************************************************
 // Funzione di inizializzazione che accetta una struttura di dati iniziale
 // ******************************************************************************************************************************
-void IcomSim::Initialize(const VfoData_t& initData)
+bool IcomSim::Initialize(VfoData_t* initData1, VfoData_t* initData2)
 {
-    debugSerial.begin(9600); // Inizializza la seriale software per il debug
+	// Inizializza la seriale per il debug
+    debugSerial.begin(9600);
+
+    if (initData1 == nullptr || initData2 == nullptr) {
+        debugSerial.println("Puntatori errati");
+        return false;
+    }
+
+    // Assegna i puntatori ai membri della classe
+    VfoData[0] = initData1;
+    VfoData[1] = initData2;
+
     debugSerial.println("Debug Serial Attivata");
 
-    // Assegna direttamente la struttura di dati iniziale alla variabile membro Vfodata
-    VfoData = initData;
-
-    // Resetta tutti i flag 
+    // Resetta tutti i flag
     memset(&Flags, 0, sizeof(Flags_t));
+	return true;
 }
 
 
@@ -157,7 +164,7 @@ void IcomSim::processCIVCommand()
                                     frequency = (frequency * 100) + (high_nibble * 10) + low_nibble;
                                 }
 
-                                VfoData.Frequency = frequency;
+                                VfoData[vfonum]->Frequency = frequency;
                                 Flags.frequencyChanged = true;
 
                                 // Debug: stampa la frequenza decodificata
@@ -166,43 +173,42 @@ void IcomSim::processCIVCommand()
                             break;
 	
 						case COMMAND_GET_FREQUENCY:
-							send_frequency(VfoData.Frequency,addressFrom, addressTo);
+							send_frequency(VfoData[vfonum]->Frequency,addressFrom, addressTo);
 							break;
 
 						// ---------------------------------------------------- SQUELCH
                         case COMMAND_SET_SQUELCH:
                             if (dataLength > 0)
                             {
-                                VfoData.Sql = data[0];
+                                VfoData[vfonum]->Sql = data[0];
                                 Flags.sqlChanged = true;
                             }
                             break;
 							
 						case COMMAND_GET_SQUELCH:
-							send_command(command, VfoData.Sql, addressFrom, addressTo);
+							send_command(command, VfoData[vfonum]->Sql, addressFrom, addressTo);
 							break;	
 
 						// ---------------------------------------------------- MODE
                         case COMMAND_SET_MODE:
                             if (dataLength > 0)
                             {
-                               VfoData.Mode = data[0];
+                               VfoData[vfonum]->Mode = data[0];
                                Flags.modeChanged = true;
                             }
                             break;							
 
 						// ---------------------------------------------------- RFGAIN
                         case COMMAND_SET_RFGAIN:
-						    // Debug_Print("%d\r\n",data[0]);
                             if (dataLength > 0)
                             {
-                                VfoData.Gain = data[0];
+                                VfoData[vfonum]->Gain = data[0];
                                 Flags.gainChanged = true;
                             }
                             break;
 							
 						case COMMAND_GET_RFGAIN:
-							send_command(command, VfoData.Gain, addressFrom, addressTo);
+							send_command(command, VfoData[vfonum]->Gain, addressFrom, addressTo);
 							break;
 						
 						// ---------------------------------------------------- MONITOR
@@ -214,28 +220,28 @@ void IcomSim::processCIVCommand()
 						case COMMAND_SET_BANDWIDTH:
 							if (dataLength > 0)
                             {
-                                VfoData.bw = data[0];
+                                VfoData[vfonum]->bw = data[0];
                                 Flags.bwChanged = true;
                             }
                             break;
 						
 						
 						case COMMAND_GET_BANDWIDTH:
-							send_command(command, VfoData.bw, addressFrom, addressTo);
+							send_command(command, VfoData[vfonum]->bw, addressFrom, addressTo);
 							break;
 							
 						// ---------------------------------------------------- TXPOWER
 						case COMMAND_SET_TX_POWER:
 							if (dataLength > 0)
                             {
-                                VfoData.txp = data[0];
+                                VfoData[vfonum]->txp = data[0];
                                 Flags.txpChanged = true;
                             }
                             break;
 						
 						
 						case COMMAND_GET_TX_POWER:
-							send_command(command, VfoData.txp, addressFrom, addressTo);
+							send_command(command, VfoData[vfonum]->txp, addressFrom, addressTo);
 							break;	
 							
 						// ---------------------------------------------------- 
@@ -334,6 +340,34 @@ void IcomSim::send_rssi(uint16_t value, uint8_t addressFrom, uint8_t addressTo)
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
+void IcomSim::send_status(uint8_t vfo, uint8_t addressFrom, uint8_t addressTo)
+{
+	uint16_t value = VfoData[vfo]->Flag.Flags;
+    uint8_t message[8];
+	
+    message[0] = 0xFE;
+    message[1] = 0xFE;
+    message[2] = addressFrom;
+    message[3] = addressTo;
+    message[4] = COMMAND_GET_STATUS;  				// Comando di risposta
+													// Dividi il valore RSSI in due byte (LSB e MSB)
+    message[5] = value & 0xFF;       				// Byte meno significativo
+    message[6] = (value >> 8) & 0xFF; 				// Byte più significativo
+
+    message[7] = 0xFD;  							// Byte di fine messaggio
+
+    sendToSerial(message, sizeof(message));			// Invia il messaggio usando la funzione centralizzata
+}
+
+
+
+
+
+
+
+// ******************************************************************************************************************************
+//
+// ******************************************************************************************************************************
 void IcomSim::send_command(uint8_t command, uint8_t value, uint8_t addressFrom, uint8_t addressTo)
 {
     uint8_t message[7];
@@ -376,7 +410,7 @@ void IcomSim::processSerialQueue()
         if (serialPort->availableForWrite() >= msg.length) 
 		{
             serialPort->write(msg.data, msg.length);
-            serialPort->flush();
+            // serialPort->flush();
         } 
 		else 
 		{
@@ -437,42 +471,6 @@ void IcomSim::sendResponse(const String& response)
     serialPort->println(response);
 }
 
-
-
-
-// ******************************************************************************************************************************
-//
-// ******************************************************************************************************************************
-
-uint8_t IcomSim::getBw()
-{
-	return VfoData.bw;
-}
-
-uint8_t IcomSim::getTxp()
-{
-	return VfoData.txp;
-}
-
-uint8_t IcomSim::getMode()
-{
-	return VfoData.Mode;
-}
-
-uint8_t IcomSim::getSquelch()
-{
-	return VfoData.Sql;
-}
-
-uint8_t IcomSim::getGain()
-{
-	return VfoData.Gain;
-}
-
-uint32_t IcomSim::getFrequency()
-{
-	return VfoData.Frequency;
-}
 
 // ******************************************************************************************************************************
 //

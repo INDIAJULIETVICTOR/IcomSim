@@ -48,6 +48,7 @@
 #define COMMAND_GET_BANDWIDTH 0x1F
 #define COMMAND_SET_TX_POWER  0x20
 #define COMMAND_GET_TX_POWER  0x21
+#define COMMAND_GET_STATUS	  0x22	
 
 #define AGC_AUTO 0
 #define AGC_MAN  1
@@ -69,16 +70,41 @@ typedef struct
 	uint8_t bw;
 	uint8_t txp;
 	
+    union 
+	{
+        struct 
+		{
+            bool monitor:1;		// 0x0001
+            bool rx:1;			// 0x0002
+            bool tx:1;			// 0x0004
+            bool scan:1;		// 0x0008
+			bool ctcss:1;		// 0x0010
+            bool dcs:1;			// 0x0020
+            bool tones:1;       // 0x0040
+			bool vuoto:1;		// ------	
+            bool flag9:1;		// 0x0100
+            bool flag10:1;		// 0x0200
+            bool flag11:1;		// 0x0400
+            bool flag12:1;		// 0x0800
+            bool flag13:1;		// 0x1000
+            bool flag14:1;		// 0x2000
+            bool shortpress:1;	// 0x4000
+            bool longpress:1;	// 0x8000
+
+        } bits;  
+        uint16_t Flags; 
+    } Flag;
+	
 } VfoData_t;
 
 
-#define FLAG_FREQUENCY_CHANGED 0x01  // 00000001
-#define FLAG_MODE_CHANGED      0x02  // 00000010
-#define FLAG_SQL_CHANGED       0x04  // 00000100
-#define FLAG_GAIN_CHANGED      0x08  // 00001000  
-#define FLAG_MONITOR_CHANGED   0x10  // 00010000  
-#define FLAG_BW_CHANGED        0x20  // 00100000 
-#define FLAG_TXP_CHANGED       0x40  // 01000000 
+#define FLAG_FREQUENCY_CHANGED   0x01  // 00000001
+#define FLAG_MODE_CHANGED        0x02  // 00000010
+#define FLAG_SQL_CHANGED         0x04  // 00000100
+#define FLAG_GAIN_CHANGED        0x08  // 00001000  
+#define FLAG_MONITOR_CHANGED     0x10  // 00010000  
+#define FLAG_BW_CHANGED          0x20  // 00100000 
+#define FLAG_TXP_CHANGED         0x40  // 01000000 
 
 typedef struct
 {
@@ -96,12 +122,13 @@ class IcomSim
 {
 public:
 	IcomSim(Stream& serial);
-	void Initialize(const VfoData_t& initData);
+	bool Initialize(VfoData_t* initData1, VfoData_t* initData2);
 
 	void processCIVCommand();
 	
 	void send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo);
 	void send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo);
+	void send_status(uint8_t vfo, uint8_t addressFrom, uint8_t addressTo);
 	void send_command(uint8_t command, uint8_t value, uint8_t addressFrom, uint8_t addressTo);
 	
 	void sendToSerial(const uint8_t* data, size_t length);
@@ -111,19 +138,10 @@ public:
 	void Debug_Print(const char *format, ...);
 	
 	uint16_t isChanged();
-	
-	uint32_t getFrequency();
-	uint8_t getMode();
-	uint8_t getSquelch();
-	uint8_t getGain();
-	uint8_t getBw();
-	uint8_t getTxp();
-	
-	
 
 private:
 	Stream* serialPort; 
-	VfoData_t VfoData;  		// Variabile membro per i dati della radio
+	VfoData_t* VfoData[2];  	// Variabile membro per i dati della radio
 	Flags_t Flags;  			// Variabile membro per i flag di stato
 	
 	void sendResponse(const String& response);
