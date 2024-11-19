@@ -38,7 +38,7 @@
 #define COMMAND_SET_SQUELCH   0x14
 #define COMMAND_GET_SQUELCH   0x15
 #define COMMAND_SET_AGC  	  0x16
-#define COMMAND_SET_STEP 	  0x17
+
 #define COMMAND_SET_SCAN 	  0x18
 #define COMMAND_GET_RSSI 	  0x19
 #define COMMAND_SET_MONITOR   0x1A
@@ -49,6 +49,9 @@
 #define COMMAND_SET_TX_POWER  0x20
 #define COMMAND_GET_TX_POWER  0x21
 #define COMMAND_GET_STATUS	  0x22	
+
+#define COMMAND_SET_STEP 	  0x23
+#define COMMAND_GET_STEP 	  0x24
 
 #define AGC_AUTO 0
 #define AGC_MAN  1
@@ -62,7 +65,7 @@ typedef struct
 	uint8_t scn_port;
 	uint8_t mute_port;
     uint32_t Frequency;   // Frequenza corrente (es. 145 MHz)
-	uint16_t step;
+	uint32_t step;
     uint8_t Mode;         // Modalità corrente (FM, AM, SSB, ecc.)
 	uint8_t AGC;
     uint8_t Gain;         // Guadagno RF corrente
@@ -98,24 +101,39 @@ typedef struct
 } VfoData_t;
 
 
-#define FLAG_FREQUENCY_CHANGED   0x01  // 00000001
-#define FLAG_MODE_CHANGED        0x02  // 00000010
-#define FLAG_SQL_CHANGED         0x04  // 00000100
-#define FLAG_GAIN_CHANGED        0x08  // 00001000  
-#define FLAG_MONITOR_CHANGED     0x10  // 00010000  
-#define FLAG_BW_CHANGED          0x20  // 00100000 
-#define FLAG_TXP_CHANGED         0x40  // 01000000 
+#define FLAG_FREQUENCY_CHANGED   0x0001  // 0000000000000001
+#define FLAG_MODE_CHANGED        0x0002  // 0000000000000010
+#define FLAG_SQL_CHANGED         0x0004  // 0000000000000100
+#define FLAG_GAIN_CHANGED        0x0008  // 0000000000001000  
+#define FLAG_MONITOR_CHANGED     0x0010  // 0000000000010000  
+#define FLAG_BW_CHANGED          0x0020  // 0000000000100000 
+#define FLAG_TXP_CHANGED         0x0040  // 0000000001000000 
+#define FLAG_STEP_CHANGED        0x0080  // 0000000010000000
 
 typedef struct
 {
-	bool frequencyChanged;       // Flag per indicare se la frequenza è stata modificata
-    bool modeChanged;            // Flag per indicare se la modalità è stata modificata
-	bool sqlChanged;             // Flag per indicare se lo squelch è stato modificato
-    bool gainChanged;            // Flag per indicare se il guadagno è stato modificato
-	bool monitorChanged;         // Flag per indicare che e' stato attivato o disattivato il monitor
-    bool bwChanged;         	 // Flag per indicare che la bw e' cambiata
-	bool txpChanged;             // Flag per indicare che la tx power e' cambiata
-	
+    union {
+        struct {
+            bool frequencyChanged:1;
+            bool modeChanged:1;
+            bool sqlChanged:1;
+            bool gainChanged:1;
+            bool monitorChanged:1;
+            bool bwChanged:1;
+            bool txpChanged:1;
+            bool stepChanged:1;
+
+            bool vuoto1:1;
+            bool vuoto2:1;
+            bool vuoto3:1;
+            bool vuoto4:1;
+            bool vuoto5:1;
+            bool vuoto6:1;
+            bool vuoto7:1;
+            bool vuoto8:1;
+        };
+        uint16_t All;  // Rappresentazione combinata come uint16_t
+    };
 } Flags_t;
 
 class IcomSim 
@@ -126,7 +144,7 @@ public:
 
 	void processCIVCommand();
 	
-	void send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo);
+	void send_frequency(uint8_t comand, uint32_t frequency, uint8_t addressFrom, uint8_t addressTo);
 	void send_rssi(uint16_t rssi, uint8_t addressFrom, uint8_t addressTo);
 	void send_status(uint8_t vfo, uint8_t addressFrom, uint8_t addressTo);
 	void send_command(uint8_t command, uint8_t value, uint8_t addressFrom, uint8_t addressTo);
@@ -142,7 +160,7 @@ public:
 private:
 	Stream* serialPort; 
 	VfoData_t* VfoData[2];  	// Variabile membro per i dati della radio
-	Flags_t Flags;  			// Variabile membro per i flag di stato
+	Flags_t Flags;  				// Variabile membro per i flag di stato
 	
 	void sendResponse(const String& response);
 };

@@ -147,6 +147,10 @@ void IcomSim::processCIVCommand()
                     switch (command)
                     {
 						// ---------------------------------------------------- FREQUENCY
+						case COMMAND_GET_FREQUENCY:
+							send_frequency(command, VfoData[vfonum]->Frequency,addressFrom, addressTo);
+							break;
+
                         case COMMAND_SET_FREQUENCY:
                             if (dataLength >= 5)
                             {
@@ -171,12 +175,42 @@ void IcomSim::processCIVCommand()
                                 // Debug_Print("Frequenza decodificata (Hz): %ld\n\r", currentFrequency);
                             }
                             break;
-	
-						case COMMAND_GET_FREQUENCY:
-							send_frequency(VfoData[vfonum]->Frequency,addressFrom, addressTo);
-							break;
+							
+						// ---------------------------------------------------- STEP
+						case COMMAND_GET_STEP:
+							send_frequency(command, VfoData[vfonum]->step,addressFrom, addressTo);
+							break;	
+							
+                        case COMMAND_SET_STEP:
+                            if (dataLength >= 5)
+                            {
+                                uint32_t frequency = 0;
+
+                                // Decodifica i 6 byte BCD ricevuti, invertendo l'ordine dei byte e i nibble
+                                for (int i = 5; i >= 0; i--)
+                                {
+                                    // Inverti l'ordine dei nibble in ciascun byte
+                                    uint8_t inverted_byte = (data[i] << 4) | (data[i] >> 4);
+
+                                    uint8_t high_nibble = (inverted_byte >> 4) & 0x0F;  // Prendi la cifra più significativa (ora invertita)
+                                    uint8_t low_nibble = inverted_byte & 0x0F;           // Prendi la cifra meno significativa (ora invertita)
+
+                                    frequency = (frequency * 100) + (high_nibble * 10) + low_nibble;
+                                }
+
+                                VfoData[vfonum]->step = frequency;
+                                Flags.stepChanged = true;
+
+                                // Debug: stampa la frequenza decodificata
+                                // Debug_Print("Frequenza decodificata (Hz): %ld\n\r", currentFrequency);
+                            }
+                            break;							
 
 						// ---------------------------------------------------- SQUELCH
+						case COMMAND_GET_SQUELCH:
+							send_command(command, VfoData[vfonum]->Sql, addressFrom, addressTo);
+							break;	
+
                         case COMMAND_SET_SQUELCH:
                             if (dataLength > 0)
                             {
@@ -184,10 +218,6 @@ void IcomSim::processCIVCommand()
                                 Flags.sqlChanged = true;
                             }
                             break;
-							
-						case COMMAND_GET_SQUELCH:
-							send_command(command, VfoData[vfonum]->Sql, addressFrom, addressTo);
-							break;	
 
 						// ---------------------------------------------------- MODE
                         case COMMAND_SET_MODE:
@@ -199,6 +229,10 @@ void IcomSim::processCIVCommand()
                             break;							
 
 						// ---------------------------------------------------- RFGAIN
+						case COMMAND_GET_RFGAIN:
+							send_command(command, VfoData[vfonum]->Gain, addressFrom, addressTo);
+							break;
+							
                         case COMMAND_SET_RFGAIN:
                             if (dataLength > 0)
                             {
@@ -206,10 +240,6 @@ void IcomSim::processCIVCommand()
                                 Flags.gainChanged = true;
                             }
                             break;
-							
-						case COMMAND_GET_RFGAIN:
-							send_command(command, VfoData[vfonum]->Gain, addressFrom, addressTo);
-							break;
 						
 						// ---------------------------------------------------- MONITOR
 						case COMMAND_SET_MONITOR:
@@ -275,20 +305,21 @@ void IcomSim::processCIVCommand()
 
 uint16_t IcomSim::isChanged()
 {
-    uint8_t changedFlags = 0; 											// Inizializza a 0, cioè nessun flag attivo
+    uint16_t changedFlags = Flags.All; 											// Inizializza a 0, cioè nessun flag attivo
 
-    if (Flags.frequencyChanged) changedFlags |= FLAG_FREQUENCY_CHANGED; 
-    if (Flags.modeChanged)    	changedFlags |= FLAG_MODE_CHANGED; 		
-    if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
-    if (Flags.gainChanged)    	changedFlags |= FLAG_GAIN_CHANGED; 		
-	if (Flags.modeChanged)    	changedFlags |= FLAG_MODE_CHANGED; 		
-    if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
-    if (Flags.monitorChanged) 	changedFlags |= FLAG_MONITOR_CHANGED; 	
-    if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
-	if (Flags.bwChanged)     	changedFlags |= FLAG_BW_CHANGED; 		
-	if (Flags.txpChanged)     	changedFlags |= FLAG_TXP_CHANGED; 		
+    // if (Flags.frequencyChanged) changedFlags |= FLAG_FREQUENCY_CHANGED; 
+    // if (Flags.modeChanged)    	changedFlags |= FLAG_MODE_CHANGED; 		
+    // if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
+    // if (Flags.gainChanged)    	changedFlags |= FLAG_GAIN_CHANGED; 		
+	// if (Flags.modeChanged)    	changedFlags |= FLAG_MODE_CHANGED; 		
+    // if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
+    // if (Flags.monitorChanged) 	changedFlags |= FLAG_MONITOR_CHANGED; 	
+    // if (Flags.sqlChanged)     	changedFlags |= FLAG_SQL_CHANGED; 		
+	// if (Flags.bwChanged)     	changedFlags |= FLAG_BW_CHANGED; 		
+	// if (Flags.txpChanged)     	changedFlags |= FLAG_TXP_CHANGED; 
+	// if (Flags.stepChanged)     	changedFlags |= FLAG_STEP_CHANGED; 		
 	
-	memset(&Flags, 0, sizeof(Flags_t));
+	Flags.All = 0;
 
     return changedFlags; // Restituisci tutti i flag attivi (0 se nessuno è attivo)
 }
@@ -296,14 +327,14 @@ uint16_t IcomSim::isChanged()
 // ******************************************************************************************************************************
 //
 // ******************************************************************************************************************************
-void IcomSim::send_frequency(uint32_t frequency, uint8_t addressFrom, uint8_t addressTo)
+void IcomSim::send_frequency(uint8_t command, uint32_t frequency, uint8_t addressFrom, uint8_t addressTo)
 {
     uint8_t message[16];
     message[0] = 0xFE;
     message[1] = 0xFE;
     message[2] = addressFrom;
     message[3] = addressTo;
-    message[4] = COMMAND_GET_FREQUENCY;  			// Comando di risposta per GET_FREQUENCY
+    message[4] = command;  							// Comando di risposta per GET_FREQUENCY o GET_STEP
 
     // Converti la frequenza in formato BCD (Binary Coded Decimal)
     for (int i = 5; i >= 0; i--) 
