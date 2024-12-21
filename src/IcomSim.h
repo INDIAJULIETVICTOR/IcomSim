@@ -23,8 +23,16 @@
 #ifndef ICOMSIM_H
 #define ICOMSIM_H
 
-#include <Arduino.h>
-#include <SoftwareSerial.h>
+#ifdef ESP32
+    #include <HardwareSerial.h>
+
+#else
+	#include <Arduino.h>
+    #include <SoftwareSerial.h>
+
+#endif
+
+#include "BK4819.h"
 
 #define CIV_START_BYTE 0xFE
 #define CIV_END_BYTE 0xFD
@@ -59,46 +67,6 @@
 #define AGC_NOR  3
 #define AGC_FAST 4
 
-// Definizione della struttura per le variabili di stato della radio
-typedef struct 
-{
-	uint8_t scn_port;
-	uint8_t mute_port;
-    uint32_t Frequency;   // Frequenza corrente (es. 145 MHz)
-	uint32_t step;
-    uint8_t Mode;         // Modalità corrente (FM, AM, SSB, ecc.)
-	uint8_t AGC;
-    uint8_t Gain;         // Guadagno RF corrente
-    uint8_t Sql;          // Livello Squelch corrente
-	uint8_t bw;
-	uint8_t txp;
-	
-    union 
-	{
-        struct 
-		{
-            bool monitor:1;		// 0x0001
-            bool rx:1;			// 0x0002
-            bool tx:1;			// 0x0004
-            bool scan:1;		// 0x0008
-			bool ctcss:1;		// 0x0010
-            bool dcs:1;			// 0x0020
-            bool tones:1;       // 0x0040
-			bool vuoto:1;		// ------	
-            bool flag9:1;		// 0x0100
-            bool flag10:1;		// 0x0200
-            bool flag11:1;		// 0x0400
-            bool flag12:1;		// 0x0800
-            bool flag13:1;		// 0x1000
-            bool flag14:1;		// 0x2000
-            bool shortpress:1;	// 0x4000
-            bool longpress:1;	// 0x8000
-
-        } bits;  
-        uint16_t Flags; 
-    } Flag;
-	
-} VfoData_t;
 
 
 #define FLAG_FREQUENCY_CHANGED   0x0001  // 0000000000000001

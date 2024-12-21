@@ -22,19 +22,19 @@
  */
 
 #include "IcomSim.h"
-#include <SoftwareSerial.h>
 #include <ArduinoQueue.h> 
 
-
-#define RX_PIN A3                                            // pin usati da softwareserial
-#define TX_PIN A4
+#define RX_PIN A2                                           // pin usati da softwareserial
+#define TX_PIN A3
 #define QUEUE_MAX_SIZE 10  // Dimensione massima della coda
 
 
 uint8_t vfonum=0;
-
-SoftwareSerial debugSerial(RX_PIN, TX_PIN);
-
+#ifdef ESP32
+	// HardwareSerial debugSerial(2);
+#else
+	SoftwareSerial debugSerial(RX_PIN, TX_PIN);
+#endif
       // MODE_AM = 0x00   # Codice per AM
       // MODE_FM = 0x01   # Codice per FM
       // MODE_SSB = 0x02  # Codice per SSB
@@ -61,16 +61,26 @@ IcomSim::IcomSim(Stream& serial)
 }
 
 
+void debug(const char* message) 
+{
+    #ifndef ESP32
+    debugSerial.println(message); // Funziona solo se debugSerial è definito
+    #endif
+}
+
 // ******************************************************************************************************************************
 // Funzione di inizializzazione che accetta una struttura di dati iniziale
 // ******************************************************************************************************************************
 bool IcomSim::Initialize(VfoData_t* initData1, VfoData_t* initData2)
 {
 	// Inizializza la seriale per il debug
-    debugSerial.begin(9600);
-
-    if (initData1 == nullptr || initData2 == nullptr) {
-        debugSerial.println("Puntatori errati");
+    #ifndef ESP32 
+		debugSerial.begin(9600);
+	#endif 
+	
+    if (initData1 == nullptr || initData2 == nullptr) 
+	{
+        debug("Puntatori errati");
         return false;
     }
 
@@ -78,7 +88,7 @@ bool IcomSim::Initialize(VfoData_t* initData1, VfoData_t* initData2)
     VfoData[0] = initData1;
     VfoData[1] = initData2;
 
-    debugSerial.println("Debug Serial Attivata");
+    debug("Debug Serial Attivata");
 
     // Resetta tutti i flag
     memset(&Flags, 0, sizeof(Flags_t));
@@ -121,7 +131,7 @@ void IcomSim::processCIVCommand()
             {
                 uint8_t addressTo = responseBuffer[2];
                 uint8_t addressFrom = responseBuffer[3];
-                uint8_t command = responseBuffer[4];
+                // uint8_t command = responseBuffer[4];
                 
                 // Calcola la lunghezza dei dati (escludendo i byte di inizio e il terminatore)
                 uint8_t dataLength = bufferIndex - 6;
@@ -178,7 +188,7 @@ void IcomSim::processCIVCommand()
 							
 						// ---------------------------------------------------- STEP
 						case COMMAND_GET_STEP:
-							send_frequency(command, VfoData[vfonum]->step,addressFrom, addressTo);
+							send_frequency(command, VfoData[vfonum]->Step,addressFrom, addressTo);
 							break;	
 							
                         case COMMAND_SET_STEP:
@@ -198,7 +208,7 @@ void IcomSim::processCIVCommand()
                                     frequency = (frequency * 100) + (high_nibble * 10) + low_nibble;
                                 }
 
-                                VfoData[vfonum]->step = frequency;
+                                VfoData[vfonum]->Step = frequency;
                                 Flags.stepChanged = true;
 
                                 // Debug: stampa la frequenza decodificata
@@ -223,7 +233,7 @@ void IcomSim::processCIVCommand()
                         case COMMAND_SET_MODE:
                             if (dataLength > 0)
                             {
-                               VfoData[vfonum]->Mode = data[0];
+                               VfoData[vfonum]->Mode = static_cast<BK4819_Mode_t>(data[0]);
                                Flags.modeChanged = true;
                             }
                             break;							
@@ -250,7 +260,7 @@ void IcomSim::processCIVCommand()
 						case COMMAND_SET_BANDWIDTH:
 							if (dataLength > 0)
                             {
-                                VfoData[vfonum]->bw = data[0];
+                                VfoData[vfonum]->bw = static_cast<BK4819_Filter_Bandwidth_t>(data[0]);
                                 Flags.bwChanged = true;
                             }
                             break;
@@ -276,7 +286,7 @@ void IcomSim::processCIVCommand()
 							
 						// ---------------------------------------------------- 
                         default:
-                            debugSerial.println("Comando CI-V non riconosciuto.");
+                            debug("Comando CI-V non riconosciuto.");
                             break;
                     }
 
@@ -285,12 +295,12 @@ void IcomSim::processCIVCommand()
                 }
                 else
                 {
-                    debugSerial.println("Errore: memoria insufficiente per allocare i dati.");
+                    debug("Errore: memoria insufficiente per allocare i dati.");
                 }
             }
             else
             {
-                debugSerial.println("Messaggio CI-V non valido: troppo corto.");
+                debug("Messaggio CI-V non valido: troppo corto.");
             }
 
             // Svuota il buffer dopo aver elaborato il messaggio
@@ -421,7 +431,7 @@ void IcomSim::sendToSerial(const uint8_t* data, size_t length)
 {
     if (serialQueue.isFull()) 
 	{
-        debugSerial.println("Errore: coda di trasmissione piena");
+        debug("Errore: coda di trasmissione piena");
         return;
     }
 
@@ -445,7 +455,7 @@ void IcomSim::processSerialQueue()
         } 
 		else 
 		{
-            debugSerial.println("Errore: spazio seriale insufficiente per il messaggio");
+            debug("Errore: spazio seriale insufficiente per il messaggio");
         }
     }
 }
@@ -514,5 +524,5 @@ void IcomSim::Debug_Print(const char *format, ...)
     vsnprintf(buffer, sizeof(buffer), format, args);
     va_end(args);
 
-    debugSerial.print(buffer); // Stampa sulla seriale di debug
+    debug(buffer); // Stampa sulla seriale di debug
 }
